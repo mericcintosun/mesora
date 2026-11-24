@@ -1,5 +1,7 @@
-// In-memory TTL cache for travel matrices, keyed by the districts and venues in a solve.
+// In-memory TTL cache, the only server memory in Mesora. It holds travel matrices (keyed
+// by the districts and venues in a solve) and parsed sentences (keyed by sentenceKey).
 // Module scope only: it lives as long as the server instance and never touches disk.
+// It is a response cache, not persistence: no group state is ever stored here.
 import { createHash } from "node:crypto";
 import { CACHE_TTL_MS } from "@/lib/config";
 
@@ -13,6 +15,16 @@ export function cacheKey(districtIds: readonly string[], venueIds: readonly stri
   const d = [...new Set(districtIds)].sort().join(",");
   const v = [...new Set(venueIds)].sort().join(",");
   return createHash("sha1").update(`${d}|${v}`).digest("hex");
+}
+
+/** Lowercased, NFC, trimmed, whitespace collapsed: one form per sentence. */
+export function normalizeSentence(text: string): string {
+  return text.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** sha1 of the normalized sentence, prefixed so it never meets a travel-matrix key. */
+export function sentenceKey(text: string): string {
+  return `parse:${createHash("sha1").update(normalizeSentence(text)).digest("hex")}`;
 }
 
 export function getCached<T>(key: string): T | undefined {

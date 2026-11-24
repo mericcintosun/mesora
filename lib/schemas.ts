@@ -24,6 +24,29 @@ export const planInputSchema = z
 
 export type PlanInput = z.infer<typeof planInputSchema>;
 
+/** Longest sentence /api/parse accepts. The join flow's input uses the same cap. */
+export const MAX_SENTENCE = 280;
+
+/** POST /api/parse: one sentence, trimmed, 1 to 280 characters, plus an optional BYOK key. */
+export const parseInputSchema = z
+  .object({
+    text: z
+      .string()
+      .trim()
+      .min(1, "Tell the agent where you are and what you need.")
+      .max(MAX_SENTENCE, `Keep it under ${MAX_SENTENCE} characters.`),
+    byok: z
+      .object({
+        provider: z.enum(["otari", "openrouter"]),
+        key: z.string().min(1).max(400),
+      })
+      .strip()
+      .optional(),
+  })
+  .strip();
+
+export type ParseInput = z.infer<typeof parseInputSchema>;
+
 /** One readable line from a zod failure, for the `hint` field. */
 export function hintFrom(error: z.ZodError): string {
   const first = error.issues[0];

@@ -29,6 +29,8 @@ export const siteActions = {
     if (!district) return { ok: false, error: `district must be one of ${DISTRICT_ORDER.join(", ")}` };
     const diet: Diet = args.diet === "vegan" || args.diet === "vegetarian" ? args.diet : "any";
     const group = currentGroup();
+    // Idempotent write: upsertParticipant keys on participantKey(name) (lib/codec.ts), so
+    // an agent retry or a double click replaces this person's row instead of adding one.
     const participants = upsertParticipant(group.participants, {
       name: (args.name || "Guest").slice(0, 24),
       district,

@@ -1,21 +1,53 @@
 import { NextResponse } from "next/server";
-import { parseConstraints, type ByokKey } from "@/lib/agent/parse-constraints";
+import { fallbackParse, parseConstraints, type ParseResult } from "@/lib/agent/parse-constraints";
+import { getCached, sentenceKey, setCached } from "@/lib/cache";
+import { apiError, type ErrorCode } from "@/lib/errors";
+import { hintFrom, parseInputSchema } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
-// Receives only the sentence the visitor typed (never the group link) and returns
-// structured constraints. Nothing is stored. A visitor's own key may ride along per
-// request and is used once, never logged.
+// Receives only the sentence the visitor typed (never the group link or its #g=
+// fragment, which the browser does not send and this route never logs) and returns
+// structured constraints. Nothing is stored except the parsed answer in the in-memory
+// response cache (lib/cache.ts), keyed by a sha1 of the normalized sentence, so the
+// same sentence always gets the same answer. A visitor's own key may ride along per
+// request and is used once, never logged or cached.
+
+type ParseResponse = ({ ok: true; cached: boolean } & ParseResult) | { ok: false; error: ErrorCode; hint: string };
+
+function fail(code: ErrorCode, hint: string, status: number) {
+  const body: ParseResponse = { ok: false, ...apiError(code, hint) };
+  return NextResponse.json(body, { status });
+}
+
 export async function POST(req: Request) {
-  let body: { text?: unknown; byok?: ByokKey };
+  let raw: unknown = null;
   try {
-    body = await req.json();
+    raw = await req.json();
   } catch {
-    return NextResponse.json({ error: "Send JSON with a text field." }, { status: 400 });
+    raw = null;
   }
-  const text = typeof body.text === "string" ? body.text.slice(0, 400) : "";
-  if (!text.trim()) return NextResponse.json({ error: "Tell the agent where you are and what you need." }, { status: 400 });
-  const byok = body.byok && typeof body.byok.key === "string" && body.byok.key ? body.byok : undefined;
-  const result = await parseConstraints(text, byok);
-  return NextResponse.json(result);
+  const parsed = parseInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    return fail("invalid_input", raw === null ? "Send JSON with a text field." : hintFrom(parsed.error), 400);
+  }
+  const { text, byok } = parsed.data;
+
+  const key = sentenceKey(text);
+  const hit = getCached<ParseResult>(key);
+  if (hit) {
+    const body: ParseResponse = { ok: true, cached: true, ...hit };
+    return NextResponse.json(body);
+  }
+
+  let result: ParseResult;
+  try {
+    result = await parseConstraints(text, byok);
+  } catch {
+    // parseConstraints already falls back on provider errors; this covers anything else.
+    result = fallbackParse(text);
+  }
+  setCached(key, result);
+  const body: ParseResponse = { ok: true, cached: false, ...result };
+  return NextResponse.json(body);
 }

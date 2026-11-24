@@ -6,8 +6,11 @@
 //      key passed per request (BYOK). This is the submission path the demo video must show.
 //   2. The developer's local `claude` CLI, for zero-key local development.
 //   3. A deterministic rule parser, so the product never breaks without a key.
-import { OPENROUTER_API_KEY, OPENROUTER_MODEL, OTARI_API_KEY, OTARI_BASE_URL, OTARI_MODEL, VERCEL } from "@/lib/config";
-import { DISTRICTS, type Diet, type DistrictId } from "@/lib/data";
+import sampleFixture from "@/fixtures/parse/sample.json";
+import { normalizeSentence } from "@/lib/cache";
+import { LOG_PREFIX, OPENROUTER_API_KEY, OPENROUTER_MODEL, OTARI_API_KEY, OTARI_BASE_URL, OTARI_MODEL, VERCEL } from "@/lib/config";
+import { DISTRICTS, SAMPLE_SENTENCE, type Diet, type DistrictId } from "@/lib/data";
+import { isApiError } from "@/lib/errors";
 import { fetchJson } from "@/lib/upstream";
 
 export interface ParsedConstraints {
@@ -17,7 +20,7 @@ export interface ParsedConstraints {
   earliest: string | null;
 }
 
-export type ParseSource = "otari" | "openrouter" | "claude-cli" | "rules";
+export type ParseSource = "otari" | "openrouter" | "claude-cli" | "rules" | "fixture";
 
 export interface ByokKey {
   provider: "otari" | "openrouter";
@@ -131,7 +134,28 @@ async function callClaudeCli(text: string): Promise<string | null> {
   });
 }
 
-export async function parseConstraints(text: string, byok?: ByokKey): Promise<{ constraints: ParsedConstraints; source: ParseSource }> {
+export interface ParseResult {
+  constraints: ParsedConstraints;
+  source: ParseSource;
+}
+
+/** True when the sentence is the demo's SAMPLE_SENTENCE, ignoring case and spacing. */
+export function isSampleSentence(text: string): boolean {
+  return normalizeSentence(text) === normalizeSentence(SAMPLE_SENTENCE);
+}
+
+/**
+ * The named fallback when no provider answers: the committed fixture for the demo
+ * sentence (statically imported, never read with fs), the rule parser for anything else.
+ * Both return the same shape, so the join flow renders the same card.
+ */
+export function fallbackParse(text: string): ParseResult {
+  const rules = parseWithRules(text);
+  if (isSampleSentence(text)) return { constraints: coerce(sampleFixture.constraints, rules), source: "fixture" };
+  return { constraints: rules, source: "rules" };
+}
+
+export async function parseConstraints(text: string, byok?: ByokKey): Promise<ParseResult> {
   const rules = parseWithRules(text);
 
   const otariKey = byok?.provider === "otari" ? byok.key : OTARI_API_KEY;
@@ -146,12 +170,15 @@ export async function parseConstraints(text: string, byok?: ByokKey): Promise<{ 
       const out = await callChat("https://openrouter.ai/api/v1", routerKey, OPENROUTER_MODEL, text);
       return { constraints: coerce(extractJson(out), rules), source: "openrouter" };
     }
-  } catch {
-    // fall through to the local paths
+  } catch (err) {
+    // Provider failure or timeout: straight to the deterministic fallback. The sentence
+    // itself is never logged.
+    console.log(`${LOG_PREFIX} parse fallback reason=${isApiError(err) ? err.error : "provider_error"}`);
+    return fallbackParse(text);
   }
 
   const cli = await callClaudeCli(text);
   if (cli) return { constraints: coerce(extractJson(cli), rules), source: "claude-cli" };
 
-  return { constraints: rules, source: "rules" };
+  return fallbackParse(text);
 }

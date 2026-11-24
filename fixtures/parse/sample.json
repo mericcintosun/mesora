@@ -1,0 +1,9 @@
+{
+  "sentence": "I'm in Kadıköy, vegetarian, can't leave before 19:00, 400 lira a head max",
+  "constraints": {
+    "district": "kadikoy",
+    "diet": "vegetarian",
+    "budgetTry": 400,
+    "earliest": "19:00"
+  }
+}

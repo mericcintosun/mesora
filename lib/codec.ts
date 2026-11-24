@@ -3,9 +3,10 @@
 // rough location or budget leaves the browsers that hold the link.
 import LZString from "lz-string";
 import { getDistrict } from "@/lib/data";
+import { MAX_PEOPLE, participantKey, upsertParticipant } from "@/lib/participant-key";
 import { DISTRICT_ORDER, type Diet, type DistrictId, type Group, type Participant } from "@/lib/types";
 
-export const MAX_PEOPLE = 8;
+export { MAX_PEOPLE };
 
 /** Compact wire shape: short keys keep the link short enough for chat apps. */
 interface WireParticipant {
@@ -96,8 +97,8 @@ export function hashFor(title: string, participants: Participant[]): string {
   return `#g=${encodeGroup(title, participants)}`;
 }
 
-/** Adds or replaces a participant by name, capped at MAX_PEOPLE. */
-export function upsertParticipant(list: Participant[], next: Participant): Participant[] {
-  const rest = list.filter((p) => p.name.toLowerCase() !== next.name.toLowerCase());
-  return [...rest, next].slice(0, MAX_PEOPLE);
-}
+// Write path. Idempotency key: participantKey(name), the NFC-normalized, trimmed,
+// whitespace-collapsed, lowercased name (lib/participant-key.ts). upsertParticipant
+// replaces the row with the same key, so a double click or a retry never duplicates a
+// person. The join flow and the website_add_my_constraints action both call it.
+export { participantKey, upsertParticipant };

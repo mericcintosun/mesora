@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { GROUP_EVENT, siteActions } from "@/components/agent-bridge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { groupFromHash, upsertParticipant } from "@/lib/codec";
 import {
   BUDGET_OPTIONS,
@@ -44,6 +45,28 @@ interface Draft {
 const EMPTY: Draft = { name: "", district: null, diet: "any", budgetTry: null, earliest: null };
 const DRAFT_KEY = "mesora-draft";
 
+/** Same cap as parseInputSchema in lib/schemas.ts (a server module, so not imported here). */
+const MAX_SENTENCE = 280;
+/** Client-side cap on /api/parse (server side: 8 s plus one retry per provider). */
+const PARSE_TIMEOUT_MS = 20_000;
+
+type ParseAnswer =
+  | {
+      ok: true;
+      constraints: { district: DistrictId | null; diet: Diet; budgetTry: number | null; earliest: string | null };
+      source: string;
+    }
+  | { ok: false; error: string; hint: string };
+
+/** Every parse source renders the same card; only this note says who read it. */
+const SOURCE_NOTE: Record<string, string> = {
+  otari: "Otari",
+  openrouter: "OpenRouter",
+  "claude-cli": "the local claude CLI",
+  rules: "the built-in rule parser (no model answered)",
+  fixture: "the saved answer for the sample sentence (no model answered)",
+};
+
 function toParticipant(d: Draft): Participant | null {
   if (!d.district) return null;
   return { name: d.name.trim() || "You", district: d.district, diet: d.diet, budgetTry: d.budgetTry ?? 400, earliest: d.earliest ?? "19:00" };
@@ -55,7 +78,11 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
   const [group, setGroup] = useState({ title: OPEN_INVITE.title, participants: OPEN_INVITE.participants });
   const [hash, setHash] = useState("");
   const [sentence, setSentence] = useState("");
-  const [agentState, setAgentState] = useState<{ status: "idle" | "busy" | "done" | "error"; note?: string }>({ status: "idle" });
+  const [agentState, setAgentState] = useState<{ status: "idle" | "done" | "error"; note?: string }>({ status: "idle" });
+  const [parsePending, setParsePending] = useState(false);
+  const [submitPending, setSubmitPending] = useState(false);
+  const [navPending, startNav] = useTransition();
+  const pending = submitPending || navPending;
 
   // Load the draft (sessionStorage) and the group (URL fragment) after mount, so back and
   // forward between steps never lose input and server HTML stays deterministic.
@@ -101,13 +128,24 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
   const prev = JOIN_STEPS[index - 1];
   const canContinue = step === "area" ? !!draft.district : step === "budget" ? !!draft.budgetTry : step === "time" ? !!draft.earliest : true;
 
+  // The agent request. `parsePending` is bound to the button's disabled prop and is set
+  // by the request itself: true before fetch, false in finally. The timeout only aborts.
   async function askAgent() {
-    const text = sentence.trim() || SAMPLE_SENTENCE;
-    setAgentState({ status: "busy" });
+    if (parsePending) return;
+    const text = (sentence.trim() || SAMPLE_SENTENCE).slice(0, MAX_SENTENCE);
+    setParsePending(true);
+    setAgentState({ status: "idle" });
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), PARSE_TIMEOUT_MS);
     try {
-      const res = await fetch("/api/parse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
-      const data = (await res.json()) as { constraints?: { district: DistrictId | null; diet: Diet; budgetTry: number | null; earliest: string | null }; source?: string; error?: string };
-      if (!res.ok || !data.constraints) throw new Error(data.error ?? "The agent could not read that.");
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        signal: controller.signal,
+      });
+      const data = (await res.json()) as ParseAnswer;
+      if (!data.ok) throw new Error(data.hint);
       const c = data.constraints;
       update({
         district: c.district ?? draft.district,
@@ -116,24 +154,40 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
         earliest: c.earliest ?? draft.earliest,
       });
       setSentence(text);
-      setAgentState({ status: "done", note: `Read by ${data.source === "rules" ? "the built-in rule parser (no key set)" : data.source}` });
+      setAgentState({ status: "done", note: `Read by ${SOURCE_NOTE[data.source] ?? data.source}` });
     } catch (e) {
-      setAgentState({ status: "error", note: e instanceof Error ? e.message : "Something went wrong." });
+      const note = controller.signal.aborted
+        ? "The agent took too long to answer."
+        : e instanceof Error && e.message
+          ? e.message
+          : "The agent could not read that.";
+      setAgentState({ status: "error", note });
+    } finally {
+      window.clearTimeout(timer);
+      setParsePending(false);
     }
   }
 
+  // The write. website_add_my_constraints goes through upsertParticipant, keyed by
+  // participantKey (lib/codec.ts), so a double click replaces the row. `submitPending`
+  // covers the write, `navPending` the route change to the result.
   function addToLink() {
-    if (!me) return;
-    const out = siteActions.website_add_my_constraints({
-      name: me.name,
-      district: me.district,
-      diet: me.diet,
-      budget_try: me.budgetTry,
-      earliest: me.earliest,
-    });
-    if (out.ok) {
-      sessionStorage.removeItem(DRAFT_KEY);
-      router.push(`/result/live${window.location.hash}`);
+    if (!me || pending) return;
+    setSubmitPending(true);
+    try {
+      const out = siteActions.website_add_my_constraints({
+        name: me.name,
+        district: me.district,
+        diet: me.diet,
+        budget_try: me.budgetTry,
+        earliest: me.earliest,
+      });
+      if (out.ok) {
+        sessionStorage.removeItem(DRAFT_KEY);
+        startNav(() => router.push(`/result/live${window.location.hash}`));
+      }
+    } finally {
+      setSubmitPending(false);
     }
   }
 
@@ -183,14 +237,31 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
                   <CardDescription>It fills all four steps. Only the structured answer is kept.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Input value={sentence} onChange={(e) => setSentence(e.target.value)} placeholder={SAMPLE_SENTENCE} aria-label="Describe your constraints" />
+                  <Input
+                    value={sentence}
+                    onChange={(e) => setSentence(e.target.value)}
+                    placeholder={SAMPLE_SENTENCE}
+                    aria-label="Describe your constraints"
+                    maxLength={MAX_SENTENCE}
+                  />
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="secondary" onClick={askAgent} disabled={agentState.status === "busy"}>
-                      {agentState.status === "busy" ? "Reading your sentence..." : "Let my agent fill it"}
+                    <Button variant="secondary" onClick={askAgent} disabled={parsePending}>
+                      {parsePending ? "Reading your sentence..." : "Let my agent fill it"}
                     </Button>
                     {agentState.status === "done" && <Badge variant="ok">{agentState.note}</Badge>}
-                    {agentState.status === "error" && <Badge variant="destructive">{agentState.note}</Badge>}
                   </div>
+                  {agentState.status === "error" && (
+                    <ErrorState
+                      title="Your agent did not answer"
+                      body={`${agentState.note ?? "Something went wrong."} Nothing was added to the link.`}
+                      onRetry={askAgent}
+                      pending={parsePending}
+                    >
+                      <Button asChild variant="ghost">
+                        <Link href={`/join/diet${hash}`}>Use the steps instead</Link>
+                      </Button>
+                    </ErrorState>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -249,8 +320,8 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
                 Next: {next.label.toLowerCase()}
               </Button>
             ) : (
-              <Button className="mesora-glow" disabled={!me || !canContinue} onClick={addToLink}>
-                Add me to the link
+              <Button className="mesora-glow" disabled={pending || !me || !canContinue} onClick={addToLink}>
+                {pending ? "Adding you..." : "Add me to the link"}
               </Button>
             )}
           </div>
@@ -276,9 +347,13 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
                 <p className="text-sm text-muted-foreground">Try a higher budget or a later time. Every venue failed a diet, budget or hours check.</p>
               ) : null}
               {people.length === 0 && (
-                <p className="rounded-3xl border-2 border-dashed border-border px-5 py-4 text-sm text-muted-foreground">
-                  Nobody is in this link yet. Add your area to start the table.
-                </p>
+                <EmptyState
+                  titleAs="p"
+                  title="Nobody is here yet"
+                  body="Type the sample sentence into the agent box, or pick your district, and you start the table."
+                  href={`/join/area${hash}`}
+                  cta="Type the sample sentence"
+                />
               )}
               <ul className="space-y-2">
                 {people.map((p) => {
