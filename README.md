@@ -34,18 +34,19 @@ The new idea here is multi-person coordination: each friend's agent runs in a di
 
 ## Tech stack
 
-- Next.js 15 (App Router), TypeScript, Tailwind CSS v4, shadcn-style primitives
-- GSAP with ScrollTrigger for the pinned before/after scene on the home page
-- lz-string for the fragment codec, a built-in geohash encoder
-- Mozilla Otari (alibaba/qwen3.8-flash) or OpenRouter free models, bring your own key
-- Planned live data: OpenStreetMap via Overpass, OSRM table service, Open-Meteo (all keyless)
-- Vercel hosting
+- Next.js 15 (App Router), React 19, TypeScript
+- Tailwind CSS 4, with small primitives built on class-variance-authority and Radix Slot
+- GSAP 3 with ScrollTrigger (through @gsap/react) for the pinned before/after scene on the home page
+- lz-string for the fragment codec, plus a built-in geohash encoder
+
+Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read data through one adapter in `lib/adapter.ts`. `ADAPTER_MODE=fake`, the default, uses the seeded Istanbul data in `lib/data/seed.ts`.
 
 ## Quickstart
 
 ```bash
 npm install
 cp .env.example .env.local   # optional, every key is optional
+npm run seed   # prints the seed summary, writes nothing
 npm run dev
 ```
 
