@@ -112,8 +112,10 @@ export default function AboutPage() {
           No key? The step-by-step form fills the same four fields and the solver, link and plan all work without any model at all.
         </p>
         <p className="max-w-[68ch] text-muted-foreground">
-          Venues come from OpenStreetMap through Overpass, travel times from an OSRM table (with a distance estimate when it is down),
-          and an outdoor flag from Open-Meteo. None of them needs an account.
+          Travel times come from one OSRM table request per solve: driving minutes from each district center to each venue, on the
+          keyless public OSRM server. Only the district center leaves the server, never a name or an exact spot. When OSRM does not
+          answer, Mesora estimates straight-line distance times 1.4 at 25 km/h and labels the plan as estimated. Venues, diet options,
+          prices and opening hours are still the Mesora sample list.
         </p>
         <Button asChild size="lg" className="mesora-glow">
           <Link href="/join/area">Try it on Friday supper</Link>
