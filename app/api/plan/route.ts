@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdapter } from "@/lib/adapter";
+import { getAdapter, solveWithFallback } from "@/lib/adapter";
 import { apiError } from "@/lib/errors";
 import { hintFrom, planInputSchema } from "@/lib/schemas";
 import type { ApiResponse, Participant, PlanView } from "@/lib/types";
@@ -36,9 +36,10 @@ export async function POST(req: Request) {
     earliest: p.earliest,
   }));
 
-  const adapter = getAdapter();
-  const plan = await adapter.solve(people);
+  // A failed real solve still answers ok: true, from the seed table (solveWithFallback).
+  // Only invalid input gets ok: false.
+  const served = await solveWithFallback(getAdapter(), people);
   // data.travelSource says "seed", "osrm" or "estimate"; source says which adapter answered.
-  const ok: ApiResponse<PlanView> = { ok: true, data: plan, source: adapter.mode };
+  const ok: ApiResponse<PlanView> = { ok: true, data: served.plan, source: served.source };
   return NextResponse.json(ok);
 }

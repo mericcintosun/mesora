@@ -3,13 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ResultView } from "@/components/result-view";
 import { SceneSlot } from "@/components/scene-slot";
-import { getAdapter } from "@/lib/adapter";
+import { getAdapter, solveWithFallback, type ServedPlan } from "@/lib/adapter";
 
-// "live" reads the group from the link fragment in the browser; the other ids are seeded demos.
-export async function generateStaticParams() {
-  const groups = await getAdapter().listGroups();
-  return [...groups.map((g) => ({ id: g.id })), { id: "live" }];
-}
+// Seeded ids (friday-supper, sunday-brunch) are solved here on the server, through the
+// adapter, so the first paint already carries live OSRM minutes in real mode: no seed
+// flash and no client fetch. That solve must not run at build time, so this route is
+// dynamic and has no generateStaticParams. "live" reads the group from the link
+// fragment in the browser only; the server never sees it.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -19,12 +20,27 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ResultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const group = await getAdapter().getGroup(id);
+  const adapter = getAdapter();
+  const group = await adapter.getGroup(id);
   if (!group && id !== "live") notFound();
+
+  // solveWithFallback already catches a failing real adapter. If even the seed solve
+  // throws, the page still renders and ResultView shows its ErrorState with a retry.
+  let served: ServedPlan | null = null;
+  if (group) {
+    try {
+      served = await solveWithFallback(adapter, group.participants);
+    } catch {
+      served = null;
+    }
+  }
 
   return (
     <>
-      <ResultView seeded={group ? { title: group.title, participants: group.participants } : null} />
+      <ResultView
+        seeded={group ? { title: group.title, participants: group.participants } : null}
+        initialPlan={served}
+      />
       <section className="grid items-center gap-8 border-t border-border py-12 lg:grid-cols-2">
         <SceneSlot
           n={3}

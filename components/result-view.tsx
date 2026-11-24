@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GROUP_EVENT } from "@/components/agent-bridge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
+import type { ServedPlan } from "@/lib/adapter";
 import { groupFromHash, hashFor } from "@/lib/codec";
 import type { Group } from "@/lib/data";
 import { solvePlan, type Plan } from "@/lib/solver";
@@ -14,24 +15,24 @@ import type { ApiResponse, PlanView } from "@/lib/types";
 type GroupLike = Pick<Group, "title" | "participants">;
 
 /** Where the minutes on screen came from, in words. */
-type SourceKind = "sample" | "live" | "estimate" | "fragment";
+type SourceKind = "sample" | "live" | "estimate" | "fallback" | "fragment";
 
 const SOURCE_LINE: Record<SourceKind, string> = {
   sample: "Sample data: travel times come from a cached table. The live engine is switched off on this deployment.",
   live: "Live source: OSRM public routing, driving minutes between district centers, venues from the Mesora sample list.",
   estimate: "Estimated: the routing service did not answer, so minutes are straight-line distance times 1.4.",
+  fallback: "Sample data: the live engine failed on this request, so travel times come from the cached table.",
   fragment: "Computed in your browser from the link. Travel times come from a cached table.",
 };
 
-type Remote = { plan: Plan; source: "fake" | "real" };
-
-/** Client-side cap on the same-origin /api/plan call (server side: 8 s plus one retry). */
+/** Client-side cap on the same-origin /api/plan retry (server side: 8 s plus one retry). */
 const PLAN_TIMEOUT_MS = 20_000;
 
-function sourceKind(seeded: boolean, remote: Remote | null): SourceKind {
-  if (!seeded) return "fragment";
-  if (!remote || remote.source === "fake" || remote.plan.travelSource === "seed") return "sample";
-  return remote.plan.travelSource === "estimate" ? "estimate" : "live";
+function sourceKind(served: ServedPlan | null): SourceKind {
+  if (!served) return "fragment";
+  if (served.fellBack) return "fallback";
+  if (served.source === "fake" || served.plan.travelSource === "seed") return "sample";
+  return served.plan.travelSource === "estimate" ? "estimate" : "live";
 }
 
 /** The API answers with "Person n"; put the seeded names back by position, in the browser. */
@@ -73,51 +74,18 @@ function ShareLinkButton({ group }: { group: GroupLike }) {
   );
 }
 
-export function ResultView({ seeded }: { seeded: GroupLike | null }) {
+/**
+ * One data flow per route, no chained effects:
+ * - seeded group (friday-supper, sunday-brunch): the server solved it (initialPlan), so
+ *   nothing is fetched on mount. The only fetch is retryPlan, bound to the ErrorState.
+ * - fragment group (/result/live): one effect decodes the #g= fragment, and the plan is
+ *   solved in the browser with useMemo. The fragment never leaves the browser.
+ */
+export function ResultView({ seeded, initialPlan }: { seeded: GroupLike | null; initialPlan: ServedPlan | null }) {
   const [group, setGroup] = useState<GroupLike | null>(seeded);
   const [ready, setReady] = useState(!!seeded);
-  const [remote, setRemote] = useState<Remote | null>(null);
-  const [remoteFailed, setRemoteFailed] = useState(false);
-
-  // Seeded groups only: ask the server's adapter for the plan (live OSRM minutes in real
-  // mode). Only district, diet, budget and start time are sent, never names. The fragment
-  // group (/result/live) never calls this and keeps solving in the browser.
-  useEffect(() => {
-    if (!seeded) return;
-    const controller = new AbortController();
-    let unmounted = false;
-    // The server already caps OSRM at 8 s plus one retry; this only stops a hung request.
-    const timer = window.setTimeout(() => controller.abort(), PLAN_TIMEOUT_MS);
-    const participants = seeded.participants.map((p) => ({
-      district: p.district,
-      diet: p.diet,
-      budgetTry: p.budgetTry,
-      earliest: p.earliest,
-    }));
-    fetch("/api/plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ participants }),
-      signal: controller.signal,
-    })
-      .then((res) => res.json() as Promise<ApiResponse<PlanView>>)
-      .then((body) => {
-        if (body.ok) {
-          setRemote({ plan: withNames(body.data, seeded), source: body.source });
-        } else {
-          setRemoteFailed(true);
-        }
-      })
-      .catch(() => {
-        if (!unmounted) setRemoteFailed(true);
-      })
-      .finally(() => window.clearTimeout(timer));
-    return () => {
-      unmounted = true;
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [seeded]);
+  const [served, setServed] = useState<ServedPlan | null>(initialPlan);
+  const [retry, setRetry] = useState<{ pending: boolean; failed: boolean }>({ pending: false, failed: false });
 
   useEffect(() => {
     if (seeded) return;
@@ -134,40 +102,79 @@ export function ResultView({ seeded }: { seeded: GroupLike | null }) {
     };
   }, [seeded]);
 
+  // Seeded groups only, and only when the visitor presses Retry. Sends district, diet,
+  // budget and start time, never names or the fragment.
+  async function retryPlan() {
+    if (!seeded || retry.pending) return;
+    setRetry({ pending: true, failed: false });
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), PLAN_TIMEOUT_MS);
+    try {
+      const participants = seeded.participants.map((p) => ({
+        district: p.district,
+        diet: p.diet,
+        budgetTry: p.budgetTry,
+        earliest: p.earliest,
+      }));
+      const res = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participants }),
+        signal: controller.signal,
+      });
+      const body = (await res.json()) as ApiResponse<PlanView>;
+      if (!body.ok) throw new Error(body.hint);
+      setServed({ plan: withNames(body.data, seeded), source: body.source, fellBack: false });
+      setRetry({ pending: false, failed: false });
+    } catch {
+      setRetry({ pending: false, failed: true });
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  const plan: Plan | null = useMemo(() => {
+    if (served) return served.plan;
+    if (!seeded && group && group.participants.length) return solvePlan(group.participants);
+    return null;
+  }, [served, seeded, group]);
+
   if (!ready) {
-    return (
-      <Card className="my-16">
-        <CardHeader>
-          <CardTitle>Reading the link...</CardTitle>
-          <CardDescription>Your browser is unpacking the group from the part after the #.</CardDescription>
-        </CardHeader>
-      </Card>
-    );
+    return <Skeleton label="Reading the link. Your browser is unpacking the group from the part after the #." className="my-16" />;
   }
 
   if (!group || group.participants.length === 0) {
     return (
-      <Card className="my-16">
-        <CardHeader>
-          <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold leading-tight">Nobody is in this link yet</h1>
-          <CardDescription>
-            Add your area to start the table, or open the Mesora link a friend sent you. The group lives after the # in the link, so a
-            bare /result/live has nothing to show.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild>
-            <Link href="/join/area">Add your area</Link>
-          </Button>
-        </CardContent>
-      </Card>
+      <EmptyState
+        className="my-16"
+        titleAs="h1"
+        title="Nobody is in this link yet"
+        body="Add your area to start the table, or open the Mesora link a friend sent you. The group lives after the # in the link, so a bare /result/live has nothing to show."
+        href="/join/area"
+        cta="Add your area"
+      />
     );
   }
 
-  // First paint (and the server HTML) uses the seed solve, so the page is never empty.
-  const plan: Plan = remote ? remote.plan : solvePlan(group.participants);
+  if (!plan) {
+    return (
+      <ErrorState
+        className="my-16"
+        titleAs="h1"
+        title={`${group.title} did not load`}
+        body={
+          retry.failed
+            ? "The plan service still did not answer. Your link is safe in the address bar. Try again in a moment."
+            : "The server could not solve this table. Your link is safe in the address bar."
+        }
+        onRetry={retryPlan}
+        pending={retry.pending}
+      />
+    );
+  }
+
   const pick = plan.pick;
-  const kind = sourceKind(!!seeded, remote);
+  const kind = sourceKind(served);
   const scale = Math.max(80, plan.midpoint.longest);
 
   return (
@@ -185,12 +192,24 @@ export function ResultView({ seeded }: { seeded: GroupLike | null }) {
             </p>
           </>
         ) : (
-          <>
-            <h1 className="text-5xl font-extrabold leading-none sm:text-7xl">No table fits everyone</h1>
-            <p className="max-w-[65ch] text-lg text-muted-foreground">Every venue failed a diet, budget or opening hours check. Someone can raise a budget or pick a later time.</p>
-          </>
+          <EmptyState
+            titleAs="h1"
+            title="No table fits everyone"
+            body="Every venue failed a diet, budget or opening hours check. Someone can raise a budget or pick a later time."
+            href="/join/budget"
+            cta="Change a budget"
+          />
         )}
         <ShareLinkButton group={group} />
+        {/* Outside the trips card, so a no-fit group still says where its minutes came from. */}
+        <p className="max-w-[65ch] text-sm text-muted-foreground" data-source={kind}>
+          {SOURCE_LINE[kind]}
+        </p>
+        {(kind === "estimate" || kind === "fallback") && (
+          <p role="status" className="max-w-[65ch] text-sm text-[color:var(--state-warn)]">
+            These minutes are not live routing. Reload later for OSRM minutes.
+          </p>
+        )}
       </section>
 
       {pick && (
@@ -221,14 +240,6 @@ export function ResultView({ seeded }: { seeded: GroupLike | null }) {
                   </div>
                 );
               })}
-              <p className="text-sm text-muted-foreground" data-source={kind}>
-                {SOURCE_LINE[kind]}
-              </p>
-              {remoteFailed && (
-                <p role="status" className="text-sm text-[color:var(--state-warn)]">
-                  The live plan did not load, so this page shows the sample plan.
-                </p>
-              )}
             </CardContent>
           </Card>
         </section>
