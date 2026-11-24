@@ -43,8 +43,16 @@ export const siteActions = {
     window.dispatchEvent(new Event(GROUP_EVENT));
     return { ok: true, people: participants.length, link: window.location.href };
   },
-  website_solve_plan() {
-    const plan = solvePlan(currentGroup().participants);
+  /**
+   * Solves the group in the page's own link, or in `link` when a peer hands Mesora one.
+   * The link is decoded here in the browser; its fragment is never sent anywhere.
+   */
+  website_solve_plan(args: { link?: string } = {}) {
+    const handed = typeof args.link === "string" ? groupFromHash(args.link) : null;
+    if (typeof args.link === "string" && !handed) {
+      return { ok: false as const, error: "link has no readable #g= group" };
+    }
+    const plan = solvePlan((handed ?? currentGroup()).participants);
     return {
       ok: !!plan.pick,
       venue: plan.pick?.venue.name ?? null,

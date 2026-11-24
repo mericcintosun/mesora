@@ -15,7 +15,8 @@
 3. Step through `/join/diet`, `/join/budget` and `/join/time` (same file, `app/join/[step]/page.tsx`), which add the other constraints. The preview updates at each step.
 4. Open `/result/friday-supper` (`app/result/[id]/page.tsx`). The solve runs, filtered venues are greyed out with their reason, and the midpoint's 74 min sits next to Mesora's 38 min.
 5. Open `/result/live` (same file, `app/result/[id]/page.tsx`) in a second window with the shared link. The browser decodes the link's fragment and shows district-only cards.
-6. Open `/about` (`app/about/page.tsx`), where the peer call by an event site is shown. This is a labelled placeholder until the peer site lands (Phase 5 of the mission).
+6. Open `/about` from the header nav ("Method", `app/about/page.tsx`). It shows the method and the three spec site actions.
+7. Scroll to `/about#peer` (`components/peer-call.tsx`, rendered by `app/about/page.tsx`). Press "Ask Mesora for the group plan" in the Friday Night Events panel, then "Allow once" on the consent card. The event site's agent calls Mesora's `website_solve_plan` with the Friday supper link and shows the same plan: Yenikapı Avlu Mutfak, longest trip 38 min for Mesora's pick against 74 min at the map midpoint, with a link "Open the plan" to `/result/friday-supper`. The panel is labelled Simulated: the call runs in this page through `siteActions`, because the cross-site spec runtime is not vendored yet. "Cancel" calls nothing.
 
 ## Closing line
 
