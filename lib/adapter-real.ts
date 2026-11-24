@@ -34,14 +34,15 @@ async function travelTable(districts: DistrictId[], venues: Venue[]): Promise<Tr
   const key = cacheKey(districts, venues.map((v) => v.id));
   const hit = getCached<TravelTable>(key);
   if (hit) {
-    log(`table cache hit districts=${districts.join(",")} source=${hit.source}`);
+    // Logs carry counts only, never which districts a group is in.
+    log(`table cache hit districts=${districts.length} source=${hit.source}`);
     return hit;
   }
 
   const sources = districts.map((id) => getDistrict(id));
   const url = buildTableUrl(OSRM_BASE_URL, { sources, destinations: venues });
   const started = Date.now();
-  log(`table requested districts=${districts.join(",")} venues=${venues.length}`);
+  log(`table requested districts=${districts.length} venues=${venues.length}`);
 
   let table: TravelTable;
   try {
@@ -57,7 +58,7 @@ async function travelTable(districts: DistrictId[], venues: Venue[]): Promise<Tr
     // A matrix with any estimated cell is labelled as an estimate: the screen must not overclaim.
     table = { minutes, source: filled.estimated ? "estimate" : "osrm" };
     log(
-      `table ok districts=${districts.join(",")} venues=${venues.map((v) => v.id).join(",")} cells=${districts.length * venues.length} ms=${Date.now() - started}${filled.estimated ? " partial=estimate" : ""}`,
+      `table ok districts=${districts.length} venues=${venues.length} cells=${districts.length * venues.length} ms=${Date.now() - started}${filled.estimated ? " partial=estimate" : ""}`,
     );
   } catch (err) {
     const reason = isApiError(err) ? err.error : "parse_failure";

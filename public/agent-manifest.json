@@ -2,7 +2,7 @@
   "schema_version": "0.3",
   "name": "Mesora",
   "description": "Group meetup planner. Each person's agent adds a rough area, diet, budget and earliest start to a shared link; a deterministic minimax solver picks the venue and time with the shortest longest trip. Group state lives in the URL fragment only.",
-  "url": "https://mesora.vercel.app",
+  "url": "https://mesora-three.vercel.app",
   "network": "/mesora.network.json",
   "runtime": "/agentic/runtime.js",
   "entry_agent": "front_man",
@@ -34,6 +34,6 @@
     }
   ],
   "peer_callable": true,
-  "privacy": "Locations are rounded to geohash precision 5 and never sent to the Mesora host.",
+  "privacy": "The group lives in the URL fragment and is never sent to the Mesora host. Each person is a district and the geohash-5 cell of its center, never an address. A sentence typed in the agent box goes to /api/parse and, when a key is set, to Otari or OpenRouter. Travel times come from the public OSRM server using district centers and venue points.",
   "llm": { "byok": true, "providers": ["otari", "openrouter"], "keyless_path": "/join/area" }
 }

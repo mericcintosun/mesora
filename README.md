@@ -1,8 +1,10 @@
 # Mesora
 
-One link for the whole group. Each friend's own agent adds their rough area and limits to it, and Mesora picks the venue and time that keeps the longest trip short. Nobody's location ever reaches a server.
+One link for the whole group. Each friend adds their district and limits to it, by sentence or by four short steps, and Mesora picks the venue and time that keeps the longest trip short. The group lives in the link fragment, which never reaches our server.
 
 > Live demo: https://mesora-three.vercel.app
+
+This hackathon (Open Agentic Web Challenge) has no sponsor bounty; Mesora enters the automatic First, Second and Third Prize ranking only (see DELIVERY.md).
 
 ## The problem
 
@@ -12,9 +14,9 @@ They also make everyone hand their location and budget to an organizer or a serv
 
 ## The solution
 
-A friend sends you a Mesora link. You open it and say "I'm in Kadıköy, vegetarian, can't leave before 19:00, 400 lira a head max". Your agent, running in your browser with your key, writes that into the link and you send it back to the group. When everyone has done the same, the page names a venue and a start time where nobody rides more than about 40 minutes, everyone can eat, and the bill fits the tightest budget.
+A friend sends you a Mesora link. You open it and type "I'm in Kadıköy, vegetarian, can't leave before 19:00, 400 lira a head max". The agent box turns that into four fields, `website_add_my_constraints` writes them into the link in your browser, and you send it back to the group. When everyone has done the same, the page names a venue and a start time where nobody rides more than about 40 minutes, everyone can eat, and the bill fits the tightest budget.
 
-- **The link is the database.** The group is compressed with lz-string into the URL fragment (after the `#`). Browsers never send the fragment with a request, so our host never sees it. Locations are cut down to a district and a geohash-5 cell (about 5 km).
+- **The link is the database.** The group is compressed with lz-string into the URL fragment (after the `#`). Browsers never send the fragment with a request, so our host never sees it. Each person is a first name, a district and the geohash-5 cell (about 5 km) of that district's center, never an address.
 - **A solver with no LLM in it.** `website_solve_plan` filters venues by diet, the lowest budget in the group and opening hours for a two hour stay, then picks the venue whose longest trip is shortest (minimax), breaking ties on total minutes.
 - **It shows its work.** Every person gets a trip bar for the Mesora pick next to the geographic midpoint, and every rejected venue says why (for example "No vegetarian mains" or "Closes 21:00, before 22:00").
 
@@ -26,21 +28,37 @@ Mesora is an open agentic website under the Cognizant AI Lab spec (github.com/co
 
 - `public/agent-manifest.json` declares the site, its capabilities, the entry agent and that it is peer callable.
 - `public/mesora.network.json` is the agent network: a `front_man` agent plus three site actions.
-- The browser runtime (from the agentify-website skill) runs the network in the visitor's tab with the visitor's own key.
-- `website_add_my_constraints`, `website_solve_plan` and `website_get_link` change real page state: the link, the plan and the share URL (`components/agent-bridge.tsx`).
-- Because the network is peer callable, another agentic site (an event page, a restaurant) can hand Mesora a group link and get back the fairest venue and time after its visitor approves.
+- Planned, not in the repo yet: the spec browser runtime `public/agentic/runtime.js` (from the agentify-website skill, pinned to the 11 November 2026 spec commit). The manifest already points at it. Until it is vendored, `node build_network.mjs --check` has not been run and Stage One conformance is unproven.
+- `website_add_my_constraints`, `website_solve_plan` and `website_get_link` change real page state: the link, the plan and the share URL (`components/agent-bridge.tsx`, registered on `window.mesoraSiteActions`).
+- Peer call, simulated: `/about#peer` (`components/peer-call.tsx`) shows an event site's agent asking for consent, then calling `website_solve_plan` with the Friday supper link and getting back the same venue and the same 38 vs 74 minutes. It runs in the same page through `siteActions`, not across origins; the cross-site call needs the vendored runtime.
+
+## Privacy: what leaves the browser
+
+- **Nobody** gets the link fragment after the `#`, where the group lives.
+- **Our server** gets the sentence typed in the agent box (`POST /api/parse`, never logged; the parsed four fields are cached in memory for ten minutes, keyed by a sha1 of the sentence). For the two sample groups only, it also solves district, diet, budget and time (`/api/plan`, names dropped).
+- **Otari or OpenRouter** get that typed sentence, only when `OTARI_API_KEY` or `OPENROUTER_API_KEY` is set on the deployment. With no key, a rule parser reads it on our server.
+- **The public OSRM server** gets district center and venue coordinates (`ADAPTER_MODE=real` only). Never a name, the link or an address.
+
+Type a district, not a street address, in the agent box: whatever you type goes to the parse route.
 
 The new idea here is multi-person coordination: each friend's agent runs in a different browser with a different key, and the only shared state is the link.
 
 ## Tech stack
 
-- Next.js 15 (App Router), React 19, TypeScript
-- Tailwind CSS 4, with small primitives built on class-variance-authority and Radix Slot
-- GSAP 3 with ScrollTrigger (through @gsap/react) for the pinned before/after scene on the home page
-- lz-string for the fragment codec, plus a built-in geohash encoder
-- zod for request validation at the edge of the JSON routes
-- OSRM `table` service (the keyless public server by default) for driving minutes
+Installed (versions as in `package.json`):
+
+- Next.js ^15.4 (App Router), React ^19.1, TypeScript ^5
+- Tailwind CSS ^4.1, with small primitives built on class-variance-authority ^0.7 and @radix-ui/react-slot ^1.1
+- GSAP ^3.15 with ScrollTrigger, through @gsap/react ^2.1, for the pinned before/after scene on the home page
+- lz-string ^1.5 for the fragment codec, plus a built-in geohash encoder
+- zod ^3.25 for request validation at the edge of the JSON routes
 - Node's built-in test runner (`node:test`) with type stripping for the travel and codec tests
+
+External service, no package: the OSRM `table` HTTP API (keyless public server by default) for driving minutes.
+
+Not installed and not built: Leaflet, opening_hours.js, ngeohash, an Overpass client, the spec runtime file.
+
+**Seed vs live.** Venues, opening hours, prices, diet flags and the two sample groups are seed data in `lib/data/seed.ts`. The only live data is OSRM driving minutes, and only when `ADAPTER_MODE=real`.
 
 Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read data through one adapter in `lib/adapter.ts`.
 
@@ -81,7 +99,7 @@ Agent paths, in order: Otari when `OTARI_API_KEY` and `OTARI_BASE_URL` are set, 
 ### OSRM table call
 
 <!-- PROOF:BEGIN osrm -->
-Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 270 ms.
+Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 275 ms.
 
 | From district center | Harem Sahil Çay Bahçesi | Yenikapı Avlu Mutfak |
 | --- | --- | --- |
@@ -109,7 +127,7 @@ Run on 2026-11-24 with `node --experimental-strip-types --test tests/*.test.mjs`
 
 1. Live venues from Overpass with opening hours parsed by opening_hours.js (trip times already come from OSRM in real mode).
 2. A Leaflet map with every friend's cell and the candidate venues, greying out the ones a filter dropped.
-3. A small companion event site that calls Mesora as a peer and shows the approval card.
+3. Move the simulated peer call on `/about#peer` to a real companion event site on its own origin, once the spec runtime is vendored.
 4. Publishing the fragment codec and the minimax solver as an npm package so other planners can reuse them.
 
 ## AI use

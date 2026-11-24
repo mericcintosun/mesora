@@ -201,7 +201,7 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
                 href={`/join/${s.id}${hash}`}
                 aria-current={s.id === step ? "step" : undefined}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-full border-2 px-4 py-1.5 text-sm font-semibold",
+                  "inline-flex min-h-11 items-center gap-2 rounded-full border-2 px-4 py-1.5 text-sm font-semibold",
                   s.id === step ? "border-primary text-primary" : i < index ? "border-violet text-foreground" : "border-border text-muted-foreground"
                 )}
               >
@@ -209,7 +209,7 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
               </Link>
             </li>
           ))}
-          <li className="inline-flex items-center rounded-full border-2 border-dashed border-border px-4 py-1.5 text-sm font-semibold text-muted-foreground">
+          <li className="inline-flex min-h-11 items-center rounded-full border-2 border-dashed border-border px-4 py-1.5 text-sm font-semibold text-muted-foreground">
             Your table
           </li>
         </ol>
@@ -234,7 +234,10 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
               <Card variant="violet">
                 <CardHeader>
                   <CardTitle>Or tell your agent in one sentence</CardTitle>
-                  <CardDescription>It fills all four steps. Only the structured answer is kept.</CardDescription>
+                  <CardDescription>
+                    It fills all four steps. The sentence goes to Mesora&apos;s parse route (and to Otari or OpenRouter when a key is set), so
+                    name a district, not a street. Only the four fields go into the link.
+</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Input
@@ -359,11 +362,11 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
                 {people.map((p) => {
                   const leg = preview.pick?.legs.find((l) => l.name === p.name);
                   return (
-                    <li key={p.name} className={cn("flex items-center justify-between rounded-full border-2 px-4 py-1.5 text-sm", me && p.name === me.name ? "border-primary" : "border-border")}>
-                      <span>
+                    <li key={p.name} className={cn("flex min-h-11 items-center justify-between gap-3 rounded-full border-2 px-4 py-1.5 text-sm", me && p.name === me.name ? "border-primary" : "border-border")}>
+                      <span className="min-w-0 truncate" title={`${p.name}, ${getDistrict(p.district).name}`}>
                         <strong>{p.name}</strong> <span className="text-muted-foreground">{getDistrict(p.district).name}</span>
                       </span>
-                      <span className="tabular-nums">{leg ? `${leg.minutes} min` : "waiting"}</span>
+                      <span className="shrink-0 tabular-nums">{leg ? `${leg.minutes} min` : "waiting"}</span>
                     </li>
                   );
                 })}
