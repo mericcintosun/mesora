@@ -2,6 +2,7 @@
 // reads its types from here so there is one source and no circular import.
 // This file holds no data except DISTRICT_ORDER, the tuple the DistrictId union and
 // the link codec's district index are both built from.
+import type { ErrorCode } from "./errors";
 
 /** District ids in a fixed order. The codec stores a district as its index here. */
 export const DISTRICT_ORDER = [
@@ -90,4 +91,4 @@ export interface PlanView {
 /** Envelope for every JSON API route except /api/parse. */
 export type ApiResponse<T> =
   | { ok: true; data: T; source: "fake" | "real" }
-  | { ok: false; error: { code: string; message: string } };
+  | { ok: false; error: ErrorCode; hint: string };
