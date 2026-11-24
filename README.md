@@ -2,7 +2,7 @@
 
 One link for the whole group. Each friend's own agent adds their rough area and limits to it, and Mesora picks the venue and time that keeps the longest trip short. Nobody's location ever reaches a server.
 
-> Live demo: https://mesora.vercel.app
+> Live demo: https://mesora-three.vercel.app
 
 ## The problem
 
