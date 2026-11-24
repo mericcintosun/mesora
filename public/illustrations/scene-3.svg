@@ -1,30 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640">
-  <rect width="960" height="640" rx="32" fill="#121010"/>
-  <rect x="300" y="60" width="360" height="90" rx="45" fill="none" stroke="#e8ff3a" stroke-width="6"/>
-  <text x="480" y="118" text-anchor="middle" fill="#e8ff3a" font-family="Arial, sans-serif" font-size="40" font-weight="800">AVLU</text>
-  <rect x="200" y="300" width="560" height="120" rx="60" fill="#1b1717" stroke="#3a3030" stroke-width="4"/>
-  <g fill="#262020" stroke="#9b5cff" stroke-width="3">
-    <circle cx="300" cy="360" r="22"/>
-    <circle cx="420" cy="360" r="22"/>
-    <circle cx="540" cy="360" r="22"/>
-    <circle cx="660" cy="360" r="22"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 480" width="1440" height="480">
+  <rect width="1440" height="480" fill="#121010"/>
+  <rect x="540" y="40" width="360" height="90" rx="45" fill="none" stroke="#e8ff3a" stroke-width="2"/>
+  <text x="720" y="100" text-anchor="middle" fill="#e8ff3a" font-family="Arial, sans-serif" font-size="40" font-weight="800">AVLU</text>
+  <rect x="440" y="200" width="560" height="110" rx="55" fill="#1b1717" stroke="#3a3030" stroke-width="2"/>
+  <g fill="#262020" stroke="#9b5cff" stroke-width="2">
+    <circle cx="540" cy="255" r="22"/>
+    <circle cx="660" cy="255" r="22"/>
+    <circle cx="780" cy="255" r="22"/>
+    <circle cx="900" cy="255" r="22"/>
   </g>
-  <g fill="none" stroke="#e8ff3a" stroke-width="5" stroke-linecap="round">
-    <path d="M40 560 C150 520 220 480 280 440"/>
-    <path d="M300 640 C340 560 390 500 410 440"/>
-    <path d="M660 640 C620 560 570 500 550 440"/>
-    <path d="M920 560 C810 520 740 480 680 440"/>
+  <g fill="none" stroke="#e8ff3a" stroke-width="2" stroke-linecap="round">
+    <path d="M120 420 C260 390 400 340 500 310"/>
+    <path d="M520 480 C580 420 630 360 650 310"/>
+    <path d="M920 480 C860 420 810 360 790 310"/>
+    <path d="M1320 420 C1180 390 1040 340 940 310"/>
   </g>
-  <g fill="#f6f1ec">
-    <circle cx="40" cy="560" r="12"/>
-    <circle cx="920" cy="560" r="12"/>
-    <circle cx="300" cy="620" r="12"/>
-    <circle cx="660" cy="620" r="12"/>
+  <g fill="#121010" stroke="#f6f1ec" stroke-width="2">
+    <circle cx="120" cy="420" r="12"/>
+    <circle cx="1320" cy="420" r="12"/>
+    <circle cx="540" cy="462" r="12"/>
+    <circle cx="900" cy="462" r="12"/>
   </g>
-  <g fill="#f6f1ec" font-family="Arial, sans-serif" font-size="22" font-weight="700">
-    <text x="60" y="520">20 min</text>
-    <text x="800" y="520">38 min</text>
-    <text x="320" y="560">30 min</text>
-    <text x="580" y="560">35 min</text>
+  <g fill="#f6f1ec" font-family="Arial, sans-serif" font-size="24" font-weight="700">
+    <text x="90" y="390">20 min</text>
+    <text x="1250" y="390">38 min</text>
+    <text x="400" y="440">35 min</text>
+    <text x="930" y="440">30 min</text>
   </g>
 </svg>
