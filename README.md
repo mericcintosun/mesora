@@ -1,8 +1,28 @@
 # Mesora
 
-One link for the whole group. Each friend adds their district and limits to it, by sentence or by four short steps, and Mesora picks the venue and time that keeps the longest trip short. The group lives in the link fragment, which never reaches our server.
+Mesora picks a dinner table for four to eight friends where the longest trip is shortest, instead of the map midpoint that sends one friend on an hour's ride. The whole group lives in one shared link, after the `#`, so no server ever holds who is coming or where from.
 
-> Live demo: https://mesora-three.vercel.app
+**Live:** https://mesora-three.vercel.app. Click "Add yourself to Friday supper" (DEMO.md step 1 to 2), or open https://mesora-three.vercel.app/result/friday-supper and press "Compare with midpoint" (DEMO.md step 4).
+
+## Try it in 60 seconds
+
+1. Open https://mesora-three.vercel.app and scroll: the pinned scene moves four friends' trip bars from the map midpoint (longest trip 74 min) to Mesora's pick (38 min).
+2. Press "Add yourself to Friday supper". Type "I'm in Kadıköy, vegetarian, can't leave before 19:00, 400 lira a head max" and press "Let my agent fill it", or click through Area, Diet, Budget and Time. The live preview updates at each step.
+3. Press "Add me to the link". `/result/live` decodes the group from the link in your browser.
+4. Open `/result/friday-supper` and press "Compare with midpoint": the longest-trip figure and every bar move between 38 and 74 minutes.
+5. Open `/about#peer`, press "Ask Mesora for the group plan", then "Allow once". A simulated event site calls `website_solve_plan` and gets the same table.
+
+## Addresses
+
+| What | Where |
+| --- | --- |
+| Live URL | https://mesora-three.vercel.app |
+
+## Prize track
+
+| Track | Prize | Credits |
+| --- | --- | --- |
+| First Prize | $5,000 USD | $1,500 USD Otari credits |
 
 This hackathon (Open Agentic Web Challenge) has no sponsor bounty; Mesora enters the automatic First, Second and Third Prize ranking only (see DELIVERY.md).
 
@@ -14,23 +34,49 @@ They also make everyone hand their location and budget to an organizer or a serv
 
 ## The solution
 
-A friend sends you a Mesora link. You open it and type "I'm in Kadıköy, vegetarian, can't leave before 19:00, 400 lira a head max". The agent box turns that into four fields, `website_add_my_constraints` writes them into the link in your browser, and you send it back to the group. When everyone has done the same, the page names a venue and a start time where nobody rides more than about 40 minutes, everyone can eat, and the bill fits the tightest budget.
+A friend sends you a Mesora link. You open it and type one sentence. The agent box turns that into four fields, `website_add_my_constraints` writes them into the link in your browser, and you send it back to the group. When everyone has done the same, the page names a venue and a start time where nobody rides more than about 40 minutes, everyone can eat, and the bill fits the tightest budget.
 
 - **The link is the database.** The group is compressed with lz-string into the URL fragment (after the `#`). Browsers never send the fragment with a request, so our host never sees it. Each person is a first name, a district and the geohash-5 cell (about 5 km) of that district's center, never an address.
 - **A solver with no LLM in it.** `website_solve_plan` filters venues by diet, the lowest budget in the group and opening hours for a two hour stay, then picks the venue whose longest trip is shortest (minimax), breaking ties on total minutes.
-- **It shows its work.** Every person gets a trip bar for the Mesora pick next to the geographic midpoint, and every rejected venue says why (for example "No vegetarian mains" or "Closes 21:00, before 22:00").
+- **It shows its work.** "Compare with midpoint" moves every trip bar between the Mesora pick and the geographic midpoint, and every rejected venue says why (for example "No vegetarian mains" or "Closes 21:00, before 22:00").
 
 In the seeded Friday supper, the midpoint venue sends Selin on a 74 minute trip. Mesora picks Yenikapı Avlu Mutfak and the longest trip drops to 38.
 
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Browser
+    UI["app/ pages + components/join-flow, result-view"]
+    Bridge["components/agent-bridge.tsx (site actions)"]
+    Codec["lib/codec.ts (#g= fragment, lz-string)"]
+    Solver["lib/solver.ts (minimax)"]
+    UI --> Bridge --> Codec
+    Bridge --> Solver
+  end
+  UI -->|typed sentence| Parse["app/api/parse"]
+  UI -->|district, diet, budget, time of sample groups| Plan["app/api/plan"]
+  Parse --> Agent["lib/agent/parse-constraints.ts"]
+  Agent --> Up["lib/upstream.ts (8 s timeout, 1 retry)"]
+  Up --> LLM["Otari or OpenRouter"]
+  Plan --> Adapter["lib/adapter.ts"]
+  Adapter --> Real["lib/adapter-real.ts"]
+  Adapter --> Solver2["lib/solver.ts"]
+  Real --> Up
+  Up --> OSRM["OSRM table API"]
+```
+
+The fragment never leaves the browser: `/result/live` and the peer call decode it and solve on the seed table in the page.
+
 ## How it uses the open agentic web spec
 
-Mesora is an open agentic website under the Cognizant AI Lab spec (github.com/cognizant-ai-labs/agentic-web):
+Mesora is shaped as an open agentic website under the Cognizant AI Lab spec (github.com/cognizant-ai-labs/agentic-web):
 
 - `public/agent-manifest.json` declares the site, its capabilities, the entry agent and that it is peer callable.
 - `public/mesora.network.json` is the agent network: a `front_man` agent plus three site actions.
-- Planned, not in the repo yet: the spec browser runtime `public/agentic/runtime.js` (from the agentify-website skill, pinned to the 11 November 2026 spec commit). The manifest already points at it. Until it is vendored, `node build_network.mjs --check` has not been run and Stage One conformance is unproven.
+- Not in the repo yet: the spec browser runtime `public/agentic/runtime.js` (from the agentify-website skill, pinned to the 11 November 2026 spec commit). The manifest already points at it. Until it is vendored, `node build_network.mjs --check` has not been run and Stage One conformance is unproven.
 - `website_add_my_constraints`, `website_solve_plan` and `website_get_link` change real page state: the link, the plan and the share URL (`components/agent-bridge.tsx`, registered on `window.mesoraSiteActions`).
-- Peer call, simulated: `/about#peer` (`components/peer-call.tsx`) shows an event site's agent asking for consent, then calling `website_solve_plan` with the Friday supper link and getting back the same venue and the same 38 vs 74 minutes. It runs in the same page through `siteActions`, not across origins; the cross-site call needs the vendored runtime.
+- Peer call, simulated: `/about#peer` (`components/peer-call.tsx`) shows an event site's agent asking for consent, then calling `website_solve_plan` with the Friday supper link and getting back the same venue and the same 38 vs 74 minutes. It runs in the same page through `siteActions`, not across origins.
 
 ## Privacy: what leaves the browser
 
@@ -41,56 +87,45 @@ Mesora is an open agentic website under the Cognizant AI Lab spec (github.com/co
 
 Type a district, not a street address, in the agent box: whatever you type goes to the parse route.
 
-The new idea here is multi-person coordination: each friend's agent runs in a different browser with a different key, and the only shared state is the link.
-
 ## Tech stack
 
 Installed (versions as in `package.json`):
 
-- Next.js ^15.4 (App Router), React ^19.1, TypeScript ^5
-- Tailwind CSS ^4.1, with small primitives built on class-variance-authority ^0.7 and @radix-ui/react-slot ^1.1
-- GSAP ^3.15 with ScrollTrigger, through @gsap/react ^2.1, for the pinned before/after scene on the home page
-- lz-string ^1.5 for the fragment codec, plus a built-in geohash encoder
-- zod ^3.25 for request validation at the edge of the JSON routes
+- Next.js 15 (`^15.4.5`, App Router), React 19 (`^19.1.0`), TypeScript 5
+- Tailwind CSS 4 (`^4.1.11`), with small primitives built on class-variance-authority 0.7 and @radix-ui/react-slot 1
+- GSAP 3 (`^3.15.1`) with ScrollTrigger, through @gsap/react 2: the pinned before/after scene, the home headline intro and the "Compare with midpoint" tween
+- lz-string 1 (`^1.5.0`) for the fragment codec, plus a built-in geohash encoder
+- zod 3 (`^3.25.0`) for request validation in the JSON routes
 - Node's built-in test runner (`node:test`) with type stripping for the travel and codec tests
+- Fonts: Sora and Nunito Sans through `next/font/google`
 
 External service, no package: the OSRM `table` HTTP API (keyless public server by default) for driving minutes.
 
-Not installed and not built: Leaflet, opening_hours.js, ngeohash, an Overpass client, the spec runtime file.
-
-**Seed vs live.** Venues, opening hours, prices, diet flags and the two sample groups are seed data in `lib/data/seed.ts`. The only live data is OSRM driving minutes, and only when `ADAPTER_MODE=real`.
-
-Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read data through one adapter in `lib/adapter.ts`.
+Not installed and not built: Leaflet, opening_hours.js, an Overpass client, the spec runtime file.
 
 ## Real vs sample data
 
-`ADAPTER_MODE` picks the adapter, and `lib/config.ts` is the only file that reads it. `fake`, the default, uses the seeded Istanbul data in `lib/data/seed.ts` with its cached travel table. `real` asks OSRM for driving minutes from each district center to each venue, in one `table` request per solve, cached in memory for ten minutes. If OSRM does not answer within 8 seconds plus one retry, Mesora estimates straight-line km x 1.4 at 25 km/h, sets `travelSource: "estimate"` and the result page says so. In both modes the venues, groups, diet flags, prices and opening hours are still the sample list in `lib/data/seed.ts`, and only district centers go to OSRM, never a name or an exact location. `/result/live` always solves in the browser from the link and calls no API.
+**What the live URL runs:** the result page says it in one line. It reads "Sample data" unless the line reads "Live source" (`ADAPTER_MODE=real` with OSRM answering).
 
-`/result/friday-supper` and `/result/sunday-brunch` are solved on the server while the page renders, so the first paint already shows the live minutes and the browser makes no request. Every server solve goes through `solveWithFallback` in `lib/adapter.ts`: if the real adapter throws, the seed table answers and the page says so. `/api/parse` caches each parsed sentence in memory by a sha1 of the normalized text, so the same sentence gets the same answer; when no model answers, the demo sentence gets the committed `fixtures/parse/sample.json` and any other sentence gets the rule parser.
+Venues, prices, opening hours, diet flags and the two sample groups are seed data in `lib/data/seed.ts`. The only live data is OSRM driving minutes, and only when `ADAPTER_MODE=real`. The home scene always uses the seed table, so it always shows 74 vs 38. The peer call on `/about#peer` is simulated in the page.
 
-Every failure from `/api/groups/[id]`, `/api/plan` and `/api/parse` has the shape `{ "ok": false, "error": "<code>", "hint": "<one readable line>" }`. The codes are `invalid_input`, `upstream_timeout`, `upstream_error`, `parse_failure` and `not_configured` (`lib/errors.ts`). A successful `/api/plan` answer carries `source` (`fake` or `real`) and `data.travelSource` (`seed`, `osrm` or `estimate`).
+`ADAPTER_MODE` picks the adapter, and `lib/config.ts` is the only file that reads it. `fake`, the default, uses the seeded Istanbul data with its cached travel table. `real` asks OSRM for driving minutes from each district center to each venue, in one `table` request per solve, cached in memory for ten minutes. If OSRM does not answer within 8 seconds plus one retry, Mesora estimates straight-line km x 1.4 at 25 km/h, sets `travelSource: "estimate"` and the result page says so. `/result/live` always solves in the browser from the link and calls no API.
+
+Every failure from `/api/groups/[id]`, `/api/plan` and `/api/parse` has the shape `{ "ok": false, "error": "<code>", "hint": "<one readable line>" }` (`lib/errors.ts`).
 
 ## Quickstart
 
 ```bash
 npm install
-cp .env.example .env.local   # optional, every key is optional
-npm run seed        # prints the seed summary and checks it, writes nothing
-npm run demo:reset  # reruns the seed check and prints the demo start route, writes nothing
-npm test            # node:test suite: travel helpers and the idempotent upsert (Node 22.6 or newer)
-npm run proof       # live OSRM call, test run and (with PROOF_BASE_URL) the demo path, written into Proof below
+cp .env.example .env.local
+npm test
+npm run proof
 npm run dev
 ```
 
-## Reset
+Every key in `.env.example` is optional. `npm run seed` and `npm run demo:reset` check the seed and write nothing; there is no server state to reset, because the group lives in the link. Set `ADAPTER_MODE=real` in `.env.local` to see live OSRM minutes on `/result/friday-supper`.
 
-`npm run demo:reset` reruns the seed check and prints the demo start route `/`. There is nothing else to reset, on purpose: the group lives in the link fragment, the seed lives in `lib/data/seed.ts`, and the demo mutates no server state. There is no store, no database, no migration or schema push, and no chain, so those parts of a reset are a no-op. The only server memory is the per-instance response cache in `lib/cache.ts`, which expires on its own after ten minutes. To clear the browser side (the fragment and the step draft), open `/join/area` in a fresh private window.
-
-Set `ADAPTER_MODE=real` in `.env.local` to see live OSRM minutes on `/result/friday-supper`. `OSRM_BASE_URL` can point at a self-hosted OSRM.
-
-Open http://localhost:3000, press "Add yourself to Friday supper" and type the sample sentence, or click through the four steps.
-
-Agent paths, in order: Otari when `OTARI_API_KEY` and `OTARI_BASE_URL` are set, then OpenRouter when `OPENROUTER_API_KEY` is set, then your local `claude` CLI in development, then a deterministic rule parser. The recorded demo must run the Otari or OpenRouter path.
+Agent paths, in order: Otari when `OTARI_API_KEY` and `OTARI_BASE_URL` are set, then OpenRouter when `OPENROUTER_API_KEY` is set, then your local `claude` CLI in development, then a deterministic rule parser.
 
 ## Proof
 
@@ -99,7 +134,7 @@ Agent paths, in order: Otari when `OTARI_API_KEY` and `OTARI_BASE_URL` are set, 
 ### OSRM table call
 
 <!-- PROOF:BEGIN osrm -->
-Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 275 ms.
+Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 270 ms.
 
 | From district center | Harem Sahil Çay Bahçesi | Yenikapı Avlu Mutfak |
 | --- | --- | --- |
@@ -132,6 +167,8 @@ Run on 2026-11-24 with `node --experimental-strip-types --test tests/*.test.mjs`
 
 ## AI use
 
-<!-- Adjust this section to each hackathon's disclosure rules. -->
+The hackathon's rules ask that narration in the demo be the entrant's own and set "no rule on AI tools in code". We used AI coding assistants for scaffolding, boilerplate and parts of the interface code. Product decisions, the solver design and final review are our own. At runtime, an LLM (Otari or OpenRouter, when a key is set) only turns one typed sentence into four form fields; the venue choice is plain code.
 
-We used AI coding assistants for scaffolding and boilerplate. Architecture, product decisions, and final code review are our own.
+## License
+
+MIT, see `LICENSE`.
