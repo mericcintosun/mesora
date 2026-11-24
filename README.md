@@ -134,7 +134,7 @@ Agent paths, in order: Otari when `OTARI_API_KEY` and `OTARI_BASE_URL` are set, 
 ### OSRM table call
 
 <!-- PROOF:BEGIN osrm -->
-Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 250 ms.
+Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 404 ms.
 
 | From district center | Harem Sahil Çay Bahçesi | Yenikapı Avlu Mutfak |
 | --- | --- | --- |
