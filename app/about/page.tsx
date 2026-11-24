@@ -4,6 +4,7 @@ import { SceneSlot } from "@/components/scene-slot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/states";
 import { STAY_MINUTES } from "@/lib/solver";
 
 export const metadata: Metadata = { title: "Method" };
@@ -103,6 +104,14 @@ export default function AboutPage() {
           <li>The visitor approves the call on an approval card.</li>
           <li>The agent calls website_solve_plan on Mesora and shows the venue.</li>
         </ol>
+        {/* Empty branch: no peer site has called Mesora yet. */}
+        <EmptyState
+          title="No peer yet"
+          body="No event site has called Mesora so far. Until one does, you can run the same solve yourself on Friday supper."
+          href="/join/area"
+          cta="Join Friday supper"
+          className="max-w-[68ch]"
+        />
       </section>
 
       <section className="space-y-4 border-t border-border pt-12">

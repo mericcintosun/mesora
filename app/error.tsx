@@ -2,20 +2,25 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/states";
 
-// Shows no error message or stack: the visitor only needs a way back.
+// The error branch for every route without its own (`/`, `/about`, and any render
+// failure under `/join` or `/result`). Shows no error message or stack: the visitor
+// only needs a retry (`reset`) and a way back.
 export default function ErrorPage({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <div className="mesora-enter space-y-6 py-24 text-center">
-      <p className="font-[family-name:var(--font-display)] text-lg font-bold">Mesora</p>
-      <h1 className="text-4xl font-extrabold sm:text-5xl">This table did not load</h1>
-      <p className="mx-auto max-w-[50ch] text-muted-foreground">Your link is safe, it lives in your address bar. Try again, or start from the home page.</p>
-      <div className="flex flex-wrap justify-center gap-3">
-        <Button onClick={() => reset()}>Try again</Button>
+    <div className="py-24">
+      <ErrorState
+        titleAs="h1"
+        title="This table did not load"
+        body="Your link is safe, it lives in your address bar. Try again, or start from the home page."
+        onRetry={() => reset()}
+        className="mx-auto max-w-2xl"
+      >
         <Button asChild variant="ghost">
           <Link href="/">Back to Mesora</Link>
         </Button>
-      </div>
+      </ErrorState>
     </div>
   );
 }
