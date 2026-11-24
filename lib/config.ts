@@ -17,6 +17,9 @@ export const CACHE_TTL_MS = 10 * 60 * 1000;
 
 export const LOG_PREFIX = "[core]";
 
+/** Public base URL of the live site (metadataBase in app/layout.tsx). Public by design. */
+export const SITE_URL: string = process.env.NEXT_PUBLIC_SITE_URL || "https://mesora-three.vercel.app";
+
 // Agent parser keys (lib/agent/parse-constraints.ts).
 export const OTARI_API_KEY: string | undefined = process.env.OTARI_API_KEY || undefined;
 export const OTARI_BASE_URL: string | undefined = process.env.OTARI_BASE_URL || undefined;

@@ -36,7 +36,7 @@ export default function OpengraphImage() {
         </div>
         <div style={{ fontSize: 96, fontWeight: 800, lineHeight: 1, color: OG.accent }}>Meet where nobody rides an hour.</div>
         <div style={{ fontSize: 30, maxWidth: 980 }}>
-          One link for the group. Each friend&apos;s agent adds their limits, Mesora picks the fairest table. Location never leaves the browser.
+          One link for the group. Each friend&apos;s agent adds their limits, Mesora picks the table where the longest trip is shortest. The group lives in the link.
         </div>
       </div>
     ),
