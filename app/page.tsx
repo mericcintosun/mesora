@@ -1,13 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { FairnessScene } from "@/components/fairness-scene";
 import { SceneSlot } from "@/components/scene-slot";
 import { Button } from "@/components/ui/button";
-import { GROUPS } from "@/lib/data";
-import { solvePlan } from "@/lib/solver";
+import { getAdapter } from "@/lib/adapter";
 
-export default function Home() {
-  const friday = GROUPS[0];
-  const plan = solvePlan(friday.participants);
+export const metadata: Metadata = { title: "Meet where nobody rides an hour" };
+
+export default async function Home() {
+  const adapter = getAdapter();
+  const friday = (await adapter.getGroup("friday-supper")) ?? (await adapter.listGroups())[0];
+  const plan = await adapter.solve(friday.participants);
   const pick = plan.pick;
   const rows = friday.participants.map((p, i) => ({
     name: p.name,
@@ -19,7 +22,7 @@ export default function Home() {
   return (
     <>
       <section className="flex min-h-[calc(100vh-4rem)] flex-col justify-center gap-10 py-12">
-        <h1 className="mesora-enter text-[clamp(3.5rem,9vw,8rem)] font-extrabold leading-[0.92]">
+        <h1 className="mesora-enter text-display font-extrabold">
           Meet where nobody rides an hour.
         </h1>
         <div className="mesora-stagger flex flex-col gap-6">

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { groupFromHash, upsertParticipant } from "@/lib/codec";
 import {
   BUDGET_OPTIONS,
+  DIET_OPTIONS,
   DISTRICTS,
   OPEN_INVITE,
   SAMPLE_SENTENCE,
@@ -90,7 +91,10 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
   };
 
   const me = toParticipant(draft);
-  const preview = useMemo(() => solvePlan(me ? upsertParticipant(group.participants, me) : group.participants), [group, me]);
+  const people = useMemo(() => (me ? upsertParticipant(group.participants, me) : group.participants), [group, me]);
+  const solved = useMemo(() => solvePlan(people), [people]);
+  // With nobody in the link there is no table to show yet.
+  const preview = people.length ? solved : { ...solved, pick: null };
   const index = JOIN_STEPS.findIndex((s) => s.id === step);
   const current = JOIN_STEPS[index];
   const next = JOIN_STEPS[index + 1];
@@ -194,9 +198,9 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
 
           {step === "diet" && (
             <div className="flex flex-wrap gap-2">
-              {(["any", "vegetarian", "vegan"] as Diet[]).map((d) => (
-                <Button key={d} size="lg" variant="choice" aria-pressed={draft.diet === d} onClick={() => update({ diet: d })}>
-                  {d === "any" ? "I eat anything" : d === "vegetarian" ? "Vegetarian" : "Vegan"}
+              {DIET_OPTIONS.map((d) => (
+                <Button key={d.id} size="lg" variant="choice" aria-pressed={draft.diet === d.id} onClick={() => update({ diet: d.id })}>
+                  {d.label}
                 </Button>
               ))}
             </div>
@@ -259,7 +263,7 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
               {preview.pick ? (
                 <CardTitle className="text-2xl">{preview.pick.venue.name}</CardTitle>
               ) : (
-                <CardTitle className="text-2xl">No venue fits everyone yet</CardTitle>
+                <CardTitle className="text-2xl">{people.length ? "No venue fits everyone yet" : "No table yet"}</CardTitle>
               )}
             </CardHeader>
             <CardContent className="space-y-5">
@@ -268,11 +272,16 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
                   {preview.pick.venue.area} at {preview.start}. Longest trip <strong className="text-primary">{preview.pick.longest} min</strong>, against{" "}
                   {preview.midpoint.longest} min at the map midpoint.
                 </p>
-              ) : (
+              ) : people.length ? (
                 <p className="text-sm text-muted-foreground">Try a higher budget or a later time. Every venue failed a diet, budget or hours check.</p>
+              ) : null}
+              {people.length === 0 && (
+                <p className="rounded-3xl border-2 border-dashed border-border px-5 py-4 text-sm text-muted-foreground">
+                  Nobody is in this link yet. Add your area to start the table.
+                </p>
               )}
               <ul className="space-y-2">
-                {(me ? upsertParticipant(group.participants, me) : group.participants).map((p) => {
+                {people.map((p) => {
                   const leg = preview.pick?.legs.find((l) => l.name === p.name);
                   return (
                     <li key={p.name} className={cn("flex items-center justify-between rounded-full border-2 px-4 py-1.5 text-sm", me && p.name === me.name ? "border-primary" : "border-border")}>

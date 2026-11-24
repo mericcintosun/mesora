@@ -1,23 +1,25 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ResultView } from "@/components/result-view";
 import { SceneSlot } from "@/components/scene-slot";
-import { GROUPS, getGroup } from "@/lib/data";
+import { getAdapter } from "@/lib/adapter";
 
 // "live" reads the group from the link fragment in the browser; the other ids are seeded demos.
-export function generateStaticParams() {
-  return [...GROUPS.map((g) => ({ id: g.id })), { id: "live" }];
+export async function generateStaticParams() {
+  const groups = await getAdapter().listGroups();
+  return [...groups.map((g) => ({ id: g.id })), { id: "live" }];
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const g = getGroup(id);
-  return { title: g ? `${g.title}: the fairest table | Mesora` : "Your group's table | Mesora" };
+  const g = await getAdapter().getGroup(id);
+  return { title: g ? `${g.title}: the fairest table` : "Your group's table" };
 }
 
 export default async function ResultPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const group = getGroup(id);
+  const group = await getAdapter().getGroup(id);
   if (!group && id !== "live") notFound();
 
   return (
@@ -37,9 +39,9 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
             Sunday brunch has five people across both sides of the Bosphorus, one vegan and one on a 350 TL budget. See what the solver
             does with that.
           </p>
-          <a href="/result/sunday-brunch" className="font-semibold text-primary underline decoration-2 underline-offset-4">
+          <Link href="/result/sunday-brunch" className="font-semibold text-primary underline decoration-2 underline-offset-4">
             Open Sunday brunch
-          </a>
+          </Link>
         </div>
       </section>
     </>
