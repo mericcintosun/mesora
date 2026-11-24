@@ -4,13 +4,16 @@ import { FairnessScene } from "@/components/fairness-scene";
 import { SceneSlot } from "@/components/scene-slot";
 import { Button } from "@/components/ui/button";
 import { getAdapter } from "@/lib/adapter";
+import { solvePlan } from "@/lib/solver";
 
 export const metadata: Metadata = { title: "Meet where nobody rides an hour" };
 
 export default async function Home() {
   const adapter = getAdapter();
   const friday = (await adapter.getGroup("friday-supper")) ?? (await adapter.listGroups())[0];
-  const plan = await adapter.solve(friday.participants);
+  // The pinned scene is a fixed before/after on the seed table (74 vs 38), in every mode.
+  // Live OSRM minutes appear on /result/friday-supper instead.
+  const plan = solvePlan(friday.participants, await adapter.listVenues());
   const pick = plan.pick;
   const rows = friday.participants.map((p, i) => ({
     name: p.name,

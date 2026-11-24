@@ -1,6 +1,8 @@
 // The adapter seam. Pages and API routes read groups, venues and plans through
-// getAdapter(), never from the seed directly, so Phase 2 can swap in live data
-// without touching any screen.
+// getAdapter(), never from the seed directly. `fake` serves the seed and its cached
+// travel table; `real` serves live OSRM minutes (lib/adapter-real.ts).
+import { realAdapter } from "@/lib/adapter-real";
+import { ADAPTER_MODE } from "@/lib/config";
 import { GROUPS, VENUES } from "@/lib/data/seed";
 import { solvePlan } from "@/lib/solver";
 import type { Group, Participant, PlanView, Venue } from "@/lib/types";
@@ -33,14 +35,9 @@ export const fakeAdapter: MesoraAdapter = {
 };
 
 export function adapterMode(): AdapterMode {
-  return process.env.ADAPTER_MODE === "real" ? "real" : "fake";
+  return ADAPTER_MODE === "real" ? "real" : "fake";
 }
 
 export function getAdapter(): MesoraAdapter {
-  if (adapterMode() === "real") {
-    // TODO(Phase 2): return the real adapter here: OSRM table for trip minutes,
-    // Overpass for candidate venues, both with the seed as the offline fallback.
-    return fakeAdapter;
-  }
-  return fakeAdapter;
+  return adapterMode() === "real" ? realAdapter : fakeAdapter;
 }
