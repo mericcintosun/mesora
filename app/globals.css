@@ -1,31 +1,32 @@
 @import "tailwindcss";
 
-/* shadcn-style design tokens. The ONLY place colors live: restyle a project by
-   editing these variables from IDENTITY.md; components never carry hex.
-   TEMPLATE placeholder palette: warm neutral, deliberately NOT the navy ground +
-   teal accent the scaffold rules ban, so a token the scaffold forgets to
-   rewrite cannot reintroduce that look. Every value below is replaced. */
+/* Mesora tokens. Every hex below comes from the IDENTITY.md key block
+   (D15 neon: warm black night, acid-yellow tubes, one violet second hue).
+   Components never carry a raw hex; they use these variables. */
 :root {
-  --background: oklch(0.985 0.004 80);
-  --foreground: oklch(0.2 0.01 60);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.01 60);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.01 60);
-  --primary: oklch(0.45 0.12 40);
-  --primary-foreground: oklch(0.98 0.005 80);
-  --secondary: oklch(0.94 0.008 80);
-  --secondary-foreground: oklch(0.25 0.01 60);
-  --muted: oklch(0.94 0.008 80);
-  --muted-foreground: oklch(0.5 0.01 60);
-  --accent: oklch(0.92 0.02 60);
-  --accent-foreground: oklch(0.2 0.01 60);
-  --destructive: oklch(0.55 0.19 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.88 0.01 80);
-  --input: oklch(0.88 0.01 80);
-  --ring: oklch(0.45 0.12 40);
-  --radius: 0.375rem;
+  --background: #121010;
+  --foreground: #f6f1ec;
+  --card: #1b1717;
+  --card-foreground: #f6f1ec;
+  --popover: #1b1717;
+  --popover-foreground: #f6f1ec;
+  --primary: #e8ff3a;
+  --primary-foreground: #121010;
+  --secondary: #262020;
+  --secondary-foreground: #f6f1ec;
+  --muted: #262020;
+  --muted-foreground: color-mix(in oklab, #f6f1ec 62%, #121010);
+  --accent: #262020;
+  --accent-foreground: #f6f1ec;
+  --violet: #9b5cff;
+  --ok: #69a56f;
+  --warn: #e0b84e;
+  --destructive: #ef6a5a;
+  --destructive-foreground: #121010;
+  --border: #3a3030;
+  --input: #3a3030;
+  --ring: #e8ff3a;
+  --radius: 1rem;
 }
 
 @theme inline {
@@ -43,18 +44,77 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-violet: var(--violet);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+  --font-display: var(--font-sora), "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-nunito), "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* The one neon glow per screen. Use on exactly one element. */
+.mesora-glow {
+  box-shadow:
+    0 0 0 2px var(--primary),
+    0 0 28px color-mix(in oklab, #e8ff3a 55%, transparent);
+}
+.mesora-glow-text {
+  text-shadow: 0 0 22px color-mix(in oklab, #e8ff3a 60%, transparent);
+}
+
+/* MOTION M2 slide: translateX(-24px) to 0 plus fade, 550ms. */
+@keyframes mesora-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.mesora-enter,
+.mesora-stagger > * {
+  animation: mesora-slide-in 550ms cubic-bezier(0.19, 1, 0.22, 1) both;
+}
+.mesora-stagger > *:nth-child(2) { animation-delay: 70ms; }
+.mesora-stagger > *:nth-child(3) { animation-delay: 140ms; }
+.mesora-stagger > *:nth-child(4) { animation-delay: 210ms; }
+.mesora-stagger > *:nth-child(5) { animation-delay: 280ms; }
+.mesora-stagger > *:nth-child(n + 6) { animation-delay: 350ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mesora-enter,
+  .mesora-stagger > * {
+    animation: none;
+  }
+}
+
+details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details > summary::-webkit-details-marker {
+  display: none;
 }
