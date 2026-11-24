@@ -95,6 +95,7 @@ function EmptyState({
   cta,
   titleAs,
   className,
+  art,
 }: {
   title: string;
   body: string;
@@ -102,9 +103,12 @@ function EmptyState({
   cta: string;
   titleAs?: HeadingTag;
   className?: string;
+  /** Optional illustration (a SceneSlot), shown first. */
+  art?: React.ReactNode;
 }) {
   return (
     <div className={cn(stateVariants({ tone: "empty" }), "space-y-4 p-6", className)}>
+      {art}
       <StateTitle as={titleAs}>{title}</StateTitle>
       <p className="max-w-[60ch] text-sm text-muted-foreground">{body}</p>
       <Button asChild variant="outline">

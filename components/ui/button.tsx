@@ -12,7 +12,7 @@ const buttonVariants = cva(
         default: "border-2 border-primary bg-primary text-primary-foreground hover:bg-transparent hover:text-primary",
         secondary: "border-2 border-violet bg-transparent text-foreground hover:bg-violet hover:text-background",
         outline: "border-2 border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
-        ghost: "border-2 border-transparent text-foreground hover:border-border",
+        ghost: "border-2 border-line bg-transparent text-foreground hover:border-primary",
         destructive: "border-2 border-destructive bg-transparent text-destructive hover:bg-destructive hover:text-destructive-foreground",
         link: "text-primary underline decoration-2 underline-offset-4 hover:decoration-violet",
         choice:
@@ -21,7 +21,7 @@ const buttonVariants = cva(
       size: {
         // 44px minimum touch target on every demo-path control (h-11).
         default: "h-11 px-5 text-sm",
-        sm: "h-8 px-3.5 text-xs",
+        sm: "h-9 px-4 text-xs",
         lg: "h-12 px-7 text-base",
         icon: "h-11 w-11",
       },

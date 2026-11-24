@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -52,22 +53,22 @@ export function SiteNav() {
         })}
       </ul>
 
-      <button
+      <Button
         type="button"
+        variant="ghost" className="md:hidden"
         aria-expanded={open}
         aria-controls={PANEL_ID}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex min-h-11 items-center rounded-full border-2 border-border px-4 text-sm font-semibold text-foreground hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
       >
         {open ? "Close menu" : "Menu"}
-      </button>
+      </Button>
 
       <div
         id={PANEL_ID}
         hidden={!open}
         className="absolute inset-x-0 top-full border-b border-border bg-background px-5 pb-5 pt-3 md:hidden"
       >
-        <ul className="space-y-2 rounded-3xl border-2 border-border bg-card p-3">
+        <ul className="space-y-2 rounded-3xl border-2 border-primary bg-background p-3">
           {NAV.map((n) => {
             const active = isActive(pathname, n.match);
             return (

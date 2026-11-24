@@ -10,7 +10,6 @@ import "./globals.css";
 const sora = Sora({ subsets: ["latin", "latin-ext"], display: "swap", variable: "--font-sora" });
 const nunito = Nunito_Sans({ subsets: ["latin", "latin-ext"], display: "swap", variable: "--font-nunito" });
 
-
 // About 140 characters (limit 160): the problem (one friend rides an hour) and the fix (one link, shortest longest trip).
 const DESCRIPTION =
   "Meet-in-the-middle apps send one friend on an hour's ride. Mesora takes one group link and picks the table where the longest trip is shortest.";
@@ -43,31 +42,47 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         <AgentBridge />
         <SiteHeader />
-        <main className="mx-auto max-w-6xl px-5 pb-24">{children}</main>
+        <main className="mx-auto max-w-6xl overflow-x-clip px-5 pb-24">{children}</main>
         <footer className="border-t border-border">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-8 text-sm text-muted-foreground">
-            <p className="max-w-[60ch]">
-              The group lives in the link after the #, which never reaches our server. Route times come from OSRM using district centers.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <a href="/agent-manifest.json" className="underline decoration-2 underline-offset-4 hover:text-foreground">
-                agent-manifest.json
-              </a>
-              <a href="/mesora.network.json" className="underline decoration-2 underline-offset-4 hover:text-foreground">
-                mesora.network.json
-              </a>
-              <Link href="/about" className="underline decoration-2 underline-offset-4 hover:text-foreground">
-                How it works
-              </Link>
-              <a
-                href="https://github.com/mericcintosun/mesora"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline decoration-2 underline-offset-4 hover:text-foreground"
-              >
-                Source
-              </a>
-            </div>
+            <p className="max-w-[60ch]">The group lives in the link after the #, which never reaches our server.</p>
+            <ul className="flex flex-wrap gap-x-5 gap-y-3">
+              <li>
+                <Link href="/about" className="underline decoration-2 underline-offset-4 hover:text-foreground">
+                  Method
+                </Link>
+              </li>
+              <li>
+                <a
+                  href="https://github.com/mericcintosun/mesora"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-2 underline-offset-4 hover:text-foreground"
+                >
+                  Source repo
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://cognizant-agenticweb.devpost.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-2 underline-offset-4 hover:text-foreground"
+                >
+                  Open Agentic Web Challenge
+                </a>
+              </li>
+              <li>
+                <a href="/agent-manifest.json" className="underline decoration-2 underline-offset-4 hover:text-foreground">
+                  agent-manifest.json
+                </a>
+              </li>
+              <li>
+                <a href="/mesora.network.json" className="underline decoration-2 underline-offset-4 hover:text-foreground">
+                  mesora.network.json
+                </a>
+              </li>
+            </ul>
           </div>
         </footer>
       </body>

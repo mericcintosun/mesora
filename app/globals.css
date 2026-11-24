@@ -104,10 +104,33 @@ body {
   font-family: var(--font-sans);
 }
 
+body {
+  line-height: 1.6;
+}
+
+/* One heading scale: h1 (display, 800) > h2 (700) > body. Sizes are set per page with
+   the text-* utilities; the family and tracking come from here. */
 h1,
 h2 {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+h1 {
+  font-weight: 800;
+  line-height: 1;
+}
+h2 {
+  font-weight: 700;
+  line-height: 1.1;
+}
+p {
+  text-wrap: pretty;
+}
+
+/* Hero words: inline blocks so GSAP can move each one; spaces stay real text nodes. */
+.mesora-word {
+  display: inline-block;
 }
 
 /* The one neon glow per screen. Use on exactly one element. */
@@ -154,6 +177,12 @@ h2 {
   .mesora-enter,
   .mesora-stagger > * {
     animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
