@@ -3,11 +3,18 @@ import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <div className="space-y-4 py-24 text-center">
-      <h2 className="text-xl font-semibold">Page not found</h2>
-      <Button asChild variant="outline">
-        <Link href="/">Back to home</Link>
-      </Button>
+    <div className="mesora-enter space-y-6 py-24 text-center">
+      <p className="font-[family-name:var(--font-display)] text-lg font-bold">Mesora</p>
+      <h1 className="text-4xl font-extrabold sm:text-5xl">No table at this address</h1>
+      <p className="mx-auto max-w-[50ch] text-muted-foreground">The step or group you asked for does not exist. Friday supper is always open.</p>
+      <div className="flex flex-wrap justify-center gap-3">
+        <Button asChild>
+          <Link href="/">Back to Mesora</Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link href="/join/area">Join the plan</Link>
+        </Button>
+      </div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { STAY_MINUTES } from "@/lib/solver";
 
-export const metadata: Metadata = { title: "Method | Mesora" };
+export const metadata: Metadata = { title: "Method" };
 
 const PARTS = [
   {
@@ -88,6 +88,21 @@ export default function AboutPage() {
             </Button>
           </div>
         </div>
+      </section>
+
+      <section id="peer" aria-labelledby="peer-title" className="space-y-4 border-t border-border pt-12">
+        <Badge variant="outline">Placeholder: the peer site is not built yet</Badge>
+        <h2 id="peer-title" className="text-3xl font-bold sm:text-4xl">When an event site asks Mesora</h2>
+        <p className="max-w-[68ch] text-muted-foreground">
+          An event page will hold a Mesora link for its guests. Its own agent shows the visitor an approval card, then calls Mesora as a
+          peer with the link and gets back the same venue and start time you see on Friday&apos;s table. The link still travels in the
+          fragment, so neither site&apos;s server sees anyone&apos;s area.
+        </p>
+        <ol className="max-w-[68ch] list-decimal space-y-2 rounded-3xl border-2 border-dashed border-border p-6 pl-10 text-muted-foreground">
+          <li>The event site&apos;s agent receives a Mesora link.</li>
+          <li>The visitor approves the call on an approval card.</li>
+          <li>The agent calls website_solve_plan on Mesora and shows the venue.</li>
+        </ol>
       </section>
 
       <section className="space-y-4 border-t border-border pt-12">

@@ -10,7 +10,7 @@ const nunito = Nunito_Sans({ subsets: ["latin", "latin-ext"], display: "swap", v
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://mesora.vercel.app"),
-  title: "Mesora: one link, fairest table",
+  title: { default: "Mesora", template: "%s | Mesora" },
   description:
     "Send your friends one link. Each person's own agent adds their rough area and limits to it, and Mesora picks the venue and time that keeps the longest trip short. Your location never touches a server.",
 };

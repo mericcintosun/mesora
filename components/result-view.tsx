@@ -26,8 +26,12 @@ function ShareLinkButton({ group }: { group: GroupLike }) {
   }
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <Button size="lg" variant="outline" onClick={copy}>
+      <Button size="lg" variant="outline" onClick={copy} className="max-w-full whitespace-normal text-left">
         {copied === "ok" ? "Link copied, paste it in the group chat" : "Copy the group link"}
+      </Button>
+      {/* A plain anchor keeps the #g= fragment, which only the browser ever reads. */}
+      <Button asChild size="lg" variant="ghost">
+        <a href={`/result/live${hashFor(group.title, group.participants)}`}>Open it as a friend would</a>
       </Button>
       {copied === "fail" && <Badge variant="destructive">Clipboard blocked. Copy the address bar instead.</Badge>}
     </div>
@@ -68,12 +72,15 @@ export function ResultView({ seeded }: { seeded: GroupLike | null }) {
     return (
       <Card className="my-16">
         <CardHeader>
-          <CardTitle className="text-2xl">This link has no group in it yet</CardTitle>
-          <CardDescription>Open a Mesora link a friend sent you, or start Friday supper and add yourself.</CardDescription>
+          <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold leading-tight">Nobody is in this link yet</h1>
+          <CardDescription>
+            Add your area to start the table, or open the Mesora link a friend sent you. The group lives after the # in the link, so a
+            bare /result/live has nothing to show.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild>
-            <Link href="/join/area">Add yourself</Link>
+            <Link href="/join/area">Add your area</Link>
           </Button>
         </CardContent>
       </Card>
@@ -92,7 +99,7 @@ export function ResultView({ seeded }: { seeded: GroupLike | null }) {
         </p>
         {pick ? (
           <>
-            <h1 className="mesora-glow-text text-5xl font-extrabold leading-none text-primary sm:text-7xl">{pick.venue.name}</h1>
+            <h1 className="mesora-glow-text break-words text-5xl font-extrabold leading-none text-primary sm:text-7xl">{pick.venue.name}</h1>
             <p className="max-w-[65ch] text-lg">
               {pick.venue.area}. Nobody rides longer than <strong>{pick.longest} minutes</strong>. The map midpoint, {plan.midpoint.venue.name},
               would have sent someone on a {plan.midpoint.longest} minute trip.
@@ -117,18 +124,18 @@ export function ResultView({ seeded }: { seeded: GroupLike | null }) {
               {pick.legs.map((leg, i) => {
                 const before = plan.midpoint.legs[i]?.minutes ?? 0;
                 return (
-                  <div key={leg.name} className="grid grid-cols-[7rem_1fr] gap-4 sm:grid-cols-[10rem_1fr]">
-                    <span className="leading-tight">
-                      <strong className="block">{leg.name}</strong>
+                  <div key={leg.name} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+                    <span className="min-w-0 leading-tight">
+                      <strong className="block break-words">{leg.name}</strong>
                       <span className="text-sm text-muted-foreground">{leg.districtName}</span>
                     </span>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-3">
-                        <span className="h-3 rounded-full bg-primary" style={{ width: `${(leg.minutes / scale) * 100}%` }} />
-                        <span className="text-sm font-semibold tabular-nums">{leg.minutes} min</span>
+                    <div className="min-w-0 space-y-1.5">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="h-3 min-w-0 rounded-full bg-primary" style={{ width: `${(leg.minutes / scale) * 100}%` }} />
+                        <span className="shrink-0 text-sm font-semibold tabular-nums">{leg.minutes} min</span>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="h-3 rounded-full bg-violet" style={{ width: `${(before / scale) * 100}%` }} />
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="h-3 min-w-0 rounded-full bg-violet" style={{ width: `${(before / scale) * 100}%` }} />
                         <span className="text-sm text-muted-foreground tabular-nums">{before} min at midpoint</span>
                       </div>
                     </div>

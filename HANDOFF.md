@@ -39,21 +39,26 @@ Identity: see IDENTITY.md (direction D15, structure S3, archetype L1, kit K2)
 | `/` | `app/page.tsx` | L1 poster hero, CTA into the flow, pinned GSAP before/after scene, folded problem prose |
 | `/join/area`, `/join/diet`, `/join/budget`, `/join/time` | `app/join/[step]/page.tsx` + `components/join-flow.tsx` | One question per step, progress indicator, live preview of the table so far, agent sentence box on `area` |
 | `/result/friday-supper`, `/result/sunday-brunch`, `/result/live` | `app/result/[id]/page.tsx` + `components/result-view.tsx` | Venue, start time, trip bars vs midpoint, every venue weighed with its rejection reason, share control. `live` decodes the `#g=` fragment |
-| `/about` | `app/about/page.tsx` | Method, spec actions, models and keys |
+| `/about` | `app/about/page.tsx` | Method, spec actions, peer call placeholder (`#peer`, labelled stub until mission item 5), models and keys |
+| `/api/groups`, `/api/groups/[id]`, `/api/plan` | `app/api/...` | JSON stubs returning `ApiResponse<T>` through `getAdapter()` |
 
-Header nav (`components/site-header.tsx`): Join the plan, Friday's table, Method. Footer links the two JSON files.
+Header nav (`components/site-nav.tsx`, rendered by `components/site-header.tsx`): Join the plan, Friday's table, Method, with `aria-current="page"` on the active route group. `/result/live` is reachable from the result page's share row ("Open it as a friend would"). Footer links the two JSON files.
 
 **One-mark proof** (the header home link, verbatim):
 
 ```tsx
-<Link href="/" className="flex items-center gap-2.5 font-[family-name:var(--font-display)] text-lg font-bold tracking-tight">
+<Link href="/" className="flex shrink-0 items-center gap-2.5 rounded-full font-[family-name:var(--font-display)] text-lg font-bold tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
   <BrandMark />
   Mesora
 </Link>
 ```
 
 **File map:**
-- `lib/data.ts`: types plus seed: 10 Istanbul districts, 10 venues with a cached transit-minute table, groups `friday-supper` (4) and `sunday-brunch` (5), `OPEN_INVITE` (Friday without Deniz).
+- `lib/types.ts`: every shared type (`District`, `Venue`, `Participant`, `Group`, `Diet`, `Side`, `DistrictId`, `Leg`, `Candidate`, `PlanView`, `ApiResponse<T>`) plus the `DISTRICT_ORDER` tuple the `DistrictId` union is built from.
+- `lib/data/seed.ts`: the only home of seed values: 10 Istanbul districts, 10 venues with a cached transit-minute table, groups `friday-supper` (4) and `sunday-brunch` (5), `OPEN_INVITE` (Friday without Deniz), `SAMPLE_SENTENCE`, `TIME_OPTIONS`, `BUDGET_OPTIONS`, `DIET_OPTIONS`. Fixed ids, no clock, no randomness.
+- `lib/data.ts`: thin re-export of the types and seed, plus `getGroup` and `getDistrict`. Kept so existing imports work.
+- `lib/adapter.ts`: `MesoraAdapter`, `fakeAdapter`, `getAdapter()` (reads `ADAPTER_MODE`, defaults to `fake`; `real` returns the fake adapter until Phase 2). Server pages (`/`, `/result/[id]`) and `app/api/groups`, `app/api/groups/[id]`, `app/api/plan` read through it.
+- `scripts/seed.mjs`: deterministic seed checker behind `npm run seed`.
 - `lib/codec.ts`: fragment codec (lz-string), geohash-5 encoder, `upsertParticipant`, 8 person cap. Real.
 - `lib/solver.ts`: minimax solver with diet, budget and opening-hours filters plus geographic-midpoint baseline. Real. **Mock:** `travelMinutes()` reads the seed table; swap for OSRM.
 - `lib/agent/parse-constraints.ts`: `parseConstraints()` priority chain: Otari, OpenRouter (env or BYOK), local `claude` CLI, rule parser. Real calls when keys are set.
@@ -99,3 +104,56 @@ Header nav (`components/site-header.tsx`): Join the plan, Friday's table, Method
 - README demo link live; Devpost description, screenshots, Otari note filled.
 - The 90 second demo runs end to end: four friends (Kadıköy, Beşiktaş, Bakırköy, Ataşehir), the first types the sample sentence and the agent calls `website_add_my_constraints`; a second window opens the link and sees district-only cards; the fourth person triggers `website_solve_plan`; filtered venues grey out; midpoint 74 min vs Mesora 38 min side by side; an event site's agent calls Mesora as a peer after an approval card and gets the same venue. Closing line: "Nobody gave anyone their address. The decision lives in the link."
 - Wow moment rehearsed at least three times with the real deployment.
+
+## 6. Phase 1: walking skeleton and demo path
+
+### Goal
+
+Every DEMO.md step has a route that renders from the seed through one adapter seam, with contracts (DEMO.md, CLAUDE.md), a typed core, API stubs, a deterministic seed and loading, empty and error surfaces.
+
+### Status
+
+All five slices are written. Nothing has been built or run by the agent; `npm run build` and `npm run seed` are the runner's checks and are **unverified**.
+
+### Decisions
+
+- **Seed script:** `scripts/seed.mjs` is a pure checker. It imports nothing from TypeScript and keeps no JSON mirror (a mirror can drift). It reads `lib/data/seed.ts` as text, extracts the ids per `export const` block, prints counts and ids, checks that `friday-supper` has 4 people, and exits 1 on a problem. It writes nothing.
+- `DISTRICT_ORDER` lives in `lib/types.ts` because `DistrictId` is derived from it. `lib/data/seed.ts` re-exports it. Import graph: `types` <- `data/seed` <- `data` <- `solver`, `codec` <- `adapter`. No cycle.
+- `Plan` in `lib/solver.ts` is now an alias of `PlanView` from `lib/types.ts`; `Leg` and `Candidate` are re-exported, so old imports still work.
+- The adapter carries a `mode` field so API responses report `source` truthfully (`fake` even when `ADAPTER_MODE=real`, since real is still a stub).
+- `POST /api/plan` keeps only `district`, `diet`, `budgetTry`, `earliest`. Names are replaced with `Person 1..n`, extra fields (coordinates, fragment) are dropped, max 8 people. Bad input gets a 400 `ok: false` body.
+- The home page also reads Friday supper and its plan through the adapter (it imported `GROUPS` before).
+- Client components (`join-flow`, `result-view`, `agent-bridge`) still call `solvePlan` and read the seed directly. They run in the browser with the fragment, which must not go to a server, so routing them through `/api/plan` would break the privacy rule.
+- `app/join/[step]/page.tsx` keeps its own step list: values exported from the `"use client"` `join-flow.tsx` are client references on the server.
+- Header nav moved into a small client component `components/site-nav.tsx` (`usePathname`). It scrolls inside itself at 375px instead of pushing the page sideways.
+- `app/globals.css` gained named identity tokens (`--ground` ... `--state-bad`, plus `--color-*` aliases), radius, spacing and type scale tokens (`text-display` is now the home h1 size), and a base-layer `:focus-visible` outline. No hex changed. The glow rules use `var(--primary)` instead of a hex.
+
+### Failed attempts
+
+None.
+
+### Files changed
+
+DEMO.md (new), CLAUDE.md (new), .env.example, README.md, HANDOFF.md, package.json, lib/types.ts (new), lib/adapter.ts (new), lib/data/seed.ts (new), lib/data.ts, lib/solver.ts, lib/codec.ts, scripts/seed.mjs (new), app/api/groups/route.ts (new), app/api/groups/[id]/route.ts (new), app/api/plan/route.ts (new), app/page.tsx, app/result/[id]/page.tsx, app/join/[step]/page.tsx, app/about/page.tsx, app/layout.tsx, app/error.tsx, app/not-found.tsx, app/join/loading.tsx (new), app/result/[id]/loading.tsx (new), app/globals.css, app/opengraph-image.tsx, components/site-header.tsx, components/site-nav.tsx (new), components/result-view.tsx, components/join-flow.tsx.
+
+### Commands run
+
+None, the agent cannot run commands; the runner builds.
+
+### Unmet or partly met items (honesty check)
+
+- Build and seed determinism are unverified until the runner runs `npm run build` and `npm run seed` twice.
+- The hex Grep over `app/` also matches `app/icon.svg` (lines 2 to 8). It is the brand favicon and on the never-touch list, so it stays. The other matches are `app/globals.css` and the `OG` block in `app/opengraph-image.tsx` (lines 9 to 14), as allowed.
+- `/result/live` from the header: there is no header link to it; it is reached from the share row in `components/result-view.tsx` ("Open it as a friend would"), as the spec allows.
+- The peer step on `/about` (`app/about/page.tsx`, section `#peer`) is a labelled placeholder, not a working peer call.
+- `CLAUDE.md` names the banned words in its writing rules list, so a word Grep over the repo root will match that one line on purpose.
+- No tables or `<pre>` blocks exist; the 375px pass fixed the trip bars (`minmax(0,1fr)`, `min-w-0`) and the header nav. Not checked in a real browser.
+
+### Open questions
+
+- Should `POST /api/plan` accept a display name (needed if the Phase 5 peer site wants named legs)? It drops names today.
+- `ADAPTER_MODE=real` returns the fake adapter. Phase 2 decides whether `real` should fail loudly or fall back when OSRM or Overpass is down.
+
+### Next best step
+
+Phase 2: run the agentify-website skill to generate the manifest, network JSON, browser runtime and bridge; wire the bridge to `siteActions`; build the real adapter (OSRM table and Overpass, seed as fallback) behind `getAdapter()` with `ADAPTER_MODE=real`; write `.farm-live.json`.
