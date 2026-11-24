@@ -40,7 +40,7 @@ The new idea here is multi-person coordination: each friend's agent runs in a di
 - lz-string for the fragment codec, plus a built-in geohash encoder
 - zod for request validation at the edge of the JSON routes
 - OSRM `table` service (the keyless public server by default) for driving minutes
-- Node's built-in test runner (`node:test`) with type stripping for the travel tests
+- Node's built-in test runner (`node:test`) with type stripping for the travel and codec tests
 
 Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read data through one adapter in `lib/adapter.ts`.
 
@@ -48,18 +48,25 @@ Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read 
 
 `ADAPTER_MODE` picks the adapter, and `lib/config.ts` is the only file that reads it. `fake`, the default, uses the seeded Istanbul data in `lib/data/seed.ts` with its cached travel table. `real` asks OSRM for driving minutes from each district center to each venue, in one `table` request per solve, cached in memory for ten minutes. If OSRM does not answer within 8 seconds plus one retry, Mesora estimates straight-line km x 1.4 at 25 km/h, sets `travelSource: "estimate"` and the result page says so. In both modes the venues, groups, diet flags, prices and opening hours are still the sample list in `lib/data/seed.ts`, and only district centers go to OSRM, never a name or an exact location. `/result/live` always solves in the browser from the link and calls no API.
 
-Every failure from `/api/groups/[id]` and `/api/plan` has the shape `{ "ok": false, "error": "<code>", "hint": "<one readable line>" }`. The codes are `invalid_input`, `upstream_timeout`, `upstream_error`, `parse_failure` and `not_configured` (`lib/errors.ts`). A successful `/api/plan` answer carries `source` (`fake` or `real`) and `data.travelSource` (`seed`, `osrm` or `estimate`).
+`/result/friday-supper` and `/result/sunday-brunch` are solved on the server while the page renders, so the first paint already shows the live minutes and the browser makes no request. Every server solve goes through `solveWithFallback` in `lib/adapter.ts`: if the real adapter throws, the seed table answers and the page says so. `/api/parse` caches each parsed sentence in memory by a sha1 of the normalized text, so the same sentence gets the same answer; when no model answers, the demo sentence gets the committed `fixtures/parse/sample.json` and any other sentence gets the rule parser.
+
+Every failure from `/api/groups/[id]`, `/api/plan` and `/api/parse` has the shape `{ "ok": false, "error": "<code>", "hint": "<one readable line>" }`. The codes are `invalid_input`, `upstream_timeout`, `upstream_error`, `parse_failure` and `not_configured` (`lib/errors.ts`). A successful `/api/plan` answer carries `source` (`fake` or `real`) and `data.travelSource` (`seed`, `osrm` or `estimate`).
 
 ## Quickstart
 
 ```bash
 npm install
 cp .env.example .env.local   # optional, every key is optional
-npm run seed   # prints the seed summary, writes nothing
-npm test       # node:test suite for the travel helpers (Node 22.6 or newer)
-npm run proof  # one live OSRM call plus the test run, written into the Proof section below
+npm run seed        # prints the seed summary and checks it, writes nothing
+npm run demo:reset  # reruns the seed check and prints the demo start route, writes nothing
+npm test            # node:test suite: travel helpers and the idempotent upsert (Node 22.6 or newer)
+npm run proof       # live OSRM call, test run and (with PROOF_BASE_URL) the demo path, written into Proof below
 npm run dev
 ```
+
+## Reset
+
+`npm run demo:reset` reruns the seed check and prints the demo start route `/`. There is nothing else to reset, on purpose: the group lives in the link fragment, the seed lives in `lib/data/seed.ts`, and the demo mutates no server state. There is no store, no database, no migration or schema push, and no chain, so those parts of a reset are a no-op. The only server memory is the per-instance response cache in `lib/cache.ts`, which expires on its own after ten minutes. To clear the browser side (the fragment and the step draft), open `/join/area` in a fresh private window.
 
 Set `ADAPTER_MODE=real` in `.env.local` to see live OSRM minutes on `/result/friday-supper`. `OSRM_BASE_URL` can point at a self-hosted OSRM.
 
@@ -69,12 +76,12 @@ Agent paths, in order: Otari when `OTARI_API_KEY` and `OTARI_BASE_URL` are set, 
 
 ## Proof
 
-`npm run proof` rewrites the two blocks below. The files in `fixtures/osrm/` are hand-written examples of the OSRM table response shape for the unit tests, not recordings of real calls; the live numbers are only the ones in the OSRM block.
+`npm run proof` rewrites the three blocks below. The files in `fixtures/osrm/` are hand-written examples of the OSRM table response shape for the unit tests, not recordings of real calls; the live numbers are only the ones in the OSRM block.
 
 ### OSRM table call
 
 <!-- PROOF:BEGIN osrm -->
-Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 292 ms.
+Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 270 ms.
 
 | From district center | Harem Sahil Çay Bahçesi | Yenikapı Avlu Mutfak |
 | --- | --- | --- |
@@ -84,10 +91,18 @@ Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one
 | Ataşehir | 14 min | 18 min |
 <!-- PROOF:END osrm -->
 
+### Demo path
+
+Three `POST /api/plan` calls of Friday supper in a row against `PROOF_BASE_URL` (set it to the deployed URL). On the seed table the pick's longest trip is 38 min against 74 at the map midpoint; in real mode the minutes are live OSRM.
+
+<!-- PROOF:BEGIN demo-path -->
+Not run in this build: PROOF_BASE_URL not set.
+<!-- PROOF:END demo-path -->
+
 ### Tests
 
 <!-- PROOF:BEGIN tests -->
-Run on 2026-11-24 with `node --experimental-strip-types --test tests/` on Node 22.23.3: 0 passed, 1 failed.
+Run on 2026-11-24 with `node --experimental-strip-types --test tests/*.test.mjs` on Node 22.23.3: 15 passed, 0 failed.
 <!-- PROOF:END tests -->
 
 ## What we would build next

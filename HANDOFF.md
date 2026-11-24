@@ -40,7 +40,7 @@ Identity: see IDENTITY.md (direction D15, structure S3, archetype L1, kit K2)
 | `/join/area`, `/join/diet`, `/join/budget`, `/join/time` | `app/join/[step]/page.tsx` + `components/join-flow.tsx` | One question per step, progress indicator, live preview of the table so far, agent sentence box on `area` |
 | `/result/friday-supper`, `/result/sunday-brunch`, `/result/live` | `app/result/[id]/page.tsx` + `components/result-view.tsx` | Venue, start time, trip bars vs midpoint, every venue weighed with its rejection reason, share control. `live` decodes the `#g=` fragment |
 | `/about` | `app/about/page.tsx` | Method, spec actions, peer call placeholder (`#peer`, labelled stub until mission item 5), models and keys |
-| `/api/groups`, `/api/groups/[id]`, `/api/plan` | `app/api/...` | JSON stubs returning `ApiResponse<T>` through `getAdapter()` |
+| `/api/groups`, `/api/groups/[id]`, `/api/plan`, `/api/parse` | `app/api/...` | JSON routes returning `ApiResponse<T>` (parse: `{ ok, constraints, source }`) through `getAdapter()` and `solveWithFallback` |
 
 Header nav (`components/site-nav.tsx`, rendered by `components/site-header.tsx`): Join the plan, Friday's table, Method, with `aria-current="page"` on the active route group. `/result/live` is reachable from the result page's share row ("Open it as a friend would"). Footer links the two JSON files.
 
@@ -62,7 +62,9 @@ Header nav (`components/site-nav.tsx`, rendered by `components/site-header.tsx`)
 - `lib/codec.ts`: fragment codec (lz-string), geohash-5 encoder, `upsertParticipant`, 8 person cap. Real.
 - `lib/solver.ts`: minimax solver with diet, budget and opening-hours filters plus geographic-midpoint baseline. Real. `solvePlanWith(people, venues, minutesFn, source)` takes the travel source; `solvePlan` uses the seed table (`travelMinutes()`), the real adapter passes OSRM minutes.
 - `lib/agent/parse-constraints.ts`: `parseConstraints()` priority chain: Otari, OpenRouter (env or BYOK), local `claude` CLI, rule parser. Real calls when keys are set.
-- `app/api/parse/route.ts`: POST endpoint for the sentence parser. Receives the sentence only, never the link.
+- `app/api/parse/route.ts`: POST endpoint for the sentence parser. Receives the sentence only, never the link. Since Phase 3: zod `parseInputSchema`, `ErrorCode` failures, cached by sentence, fixture fallback.
+- `components/ui/states.tsx` (Phase 3): `Skeleton`, `ErrorState` (always a retry), `EmptyState` (always a CTA).
+- `lib/participant-key.ts` (Phase 3): `participantKey` and `upsertParticipant`, re-exported by `lib/codec.ts`.
 - `components/agent-bridge.tsx`: `siteActions` (`website_add_my_constraints`, `website_solve_plan`, `website_get_link`) registered on `window.mesoraSiteActions`. The join flow's final button calls the same action.
 - `components/fairness-scene.tsx`: K2 signature 1 (see below).
 - `public/agent-manifest.json`, `public/mesora.network.json`: **hand-written placeholders shaped after the spec.** They are NOT yet validated. Regenerate them with the agentify-website skill.
@@ -201,8 +203,8 @@ None. The agent cannot run commands.
 - Build, tests, seed and proof are unverified until the runner runs them.
 - `npm test` uses the literal `node --experimental-strip-types --test tests/` from the spec. Node 20 searches a directory argument for test files; on Node 22 and newer the arguments are glob patterns and a bare directory may not match any file. If `npm test` reports 0 tests, change the argument to `tests/*.test.mjs` (in `package.json` and in `scripts/proof.mjs`). Type stripping needs Node 22.6 or newer.
 - "Every fetch call site uses `UPSTREAM_TIMEOUT_MS` and `UPSTREAM_RETRIES`": true for every server call (`lib/upstream.ts`, used by `lib/adapter-real.ts` and `lib/agent/parse-constraints.ts`). The two browser calls to our own routes (`/api/parse` in `components/join-flow.tsx`, `/api/plan` in `components/result-view.tsx`) cannot import `lib/config.ts` (it reads `process.env` and must stay server only); `/api/plan` from the browser has its own 20 s abort. `scripts/proof.mjs` uses its own 8 s timeout and no retry, since it is a plain Node script.
-- The source line and the warn note sit inside the "Trip per person" card, which only renders when a venue fits everyone. A group with no fitting venue shows no source line.
-- During the first moments on `/result/friday-supper` in real mode the page shows the seed plan and the "Sample data" line until `/api/plan` answers; then it switches to the live plan.
+- The source line and the warn note sit inside the "Trip per person" card, which only renders when a venue fits everyone. A group with no fitting venue shows no source line. (Fixed in Phase 3: both now sit under the hero, see section 8.)
+- During the first moments on `/result/friday-supper` in real mode the page shows the seed plan and the "Sample data" line until `/api/plan` answers; then it switches to the live plan. (Fixed in Phase 3: the page is solved on the server, see section 8.)
 - The memory cache is per serverless instance, so "stable across two reloads" holds when both reloads hit the same warm instance. OSRM itself is deterministic for the same input, so a cold instance should return the same minutes unless the public server's map data changed.
 - The hex Grep over `app/` still matches `app/icon.svg` (never-touch brand file), `app/globals.css` and the `OG` block in `app/opengraph-image.tsx`, as in Phase 1. None of the files changed in this phase has a hex literal.
 
@@ -219,4 +221,105 @@ None. The agent cannot run commands.
 
 ### Next best step
 
-Phase 3: generate the spec manifest, network JSON, browser runtime and bridge with the agentify-website skill and wire them to `siteActions` (the Stage One gate). Then live venues from Overpass with opening_hours.js, keeping the seed as fallback behind the same adapter, and the "Compare with midpoint" toggle (K2 signature 3) on the now live numbers.
+Phase 3: generate the spec manifest, network JSON, browser runtime and bridge with the agentify-website skill and wire them to `siteActions` (the Stage One gate). Then live venues from Overpass with opening_hours.js, keeping the seed as fallback behind the same adapter, and the "Compare with midpoint" toggle (K2 signature 3) on the now live numbers. (Superseded: Phase 3 took the demo path hardening instead, see section 8. Runtime vendoring is on its manual checklist.)
+
+## 8. Phase 3: demo path on the real flow
+
+### Goal
+
+DEMO.md steps 1 to 6 run through the real adapter with a named fallback in the same file, survive an upstream failure, and show a named Skeleton, ErrorState and EmptyState on every demo route. `/result/friday-supper` shows live OSRM minutes on first paint, with no seed flash and no client fetch.
+
+### Status
+
+All five slices are written. Nothing was built, tested or run by the agent. `npm run build`, `npm test`, `npm run seed`, `npm run demo:reset` and `npm run proof` are the runner's checks and are **unverified**. No slice was cut.
+
+### Decisions
+
+**Store row.** Decision-table row 1, "Steps only read seeded or computed data". The group lives in the URL fragment (`lib/codec.ts`), the seed lives in `lib/data/seed.ts`, and the demo mutates no server state. There is no `lib/store.ts` because there is nothing to store: a store would only ever hold group state, and the product promise is that no server holds group state. `lib/cache.ts` stays the only server memory; it is a per-instance response cache with a 10 minute TTL and a 200 entry cap, not persistence.
+
+Rejected rows:
+- KV store: would force a server to hold the group, which breaks the privacy claim that the link is the database.
+- Postgres: the same problem plus a migration and a connection to keep alive during judging, for data that already lives in the link.
+- On-chain: no contracts exist, no wallet, and a public ledger is the opposite of "nobody sees your area".
+
+**Fallback ledger (DEMO steps 1 to 6).** Every fallback below is code in the named file, not a comment.
+
+| Step | Route | Real code path (file) | Fallback symbol (same file) |
+| --- | --- | --- | --- |
+| 1 | `/` | `app/page.tsx`: `getAdapter()` then `solvePlan(friday.participants, await adapter.listVenues())` (the pinned scene stays on the seed table by design, 74 vs 38) | `app/page.tsx`: `?? (await adapter.listGroups())[0]` when `friday-supper` is missing, and `pick ? <FairnessScene .../> : null`; render errors go to `app/error.tsx` (`ErrorState` with `reset`) |
+| 2 | `/join/area` | `components/join-flow.tsx`: `askAgent` POSTs to `/api/parse`, which calls `parseConstraints` in `lib/agent/parse-constraints.ts` | `components/join-flow.tsx`: the `ErrorState` branch (`agentState.status === "error"`) with Retry and "Use the steps instead"; `lib/agent/parse-constraints.ts`: `fallbackParse` (fixture for the sample sentence, rule parser otherwise) |
+| 3 | `/join/diet`, `/join/budget`, `/join/time` | `components/join-flow.tsx`: `update()` plus `solvePlan(people)` in the browser | `components/join-flow.tsx`: the group defaults to `OPEN_INVITE` and `sync()` only replaces it when `groupFromHash` decodes (`if (g) setGroup(g)`); `EmptyState` when nobody is in the table |
+| 4 | `/result/friday-supper` | `app/result/[id]/page.tsx`: `solveWithFallback(adapter, group.participants)` on the server, real adapter in `lib/adapter-real.ts` | `lib/adapter.ts`: `solveWithFallback` catch returns `fakeAdapter.solve(people)` and logs `[core] fallback seed reason=...`; `lib/adapter-real.ts`: `estimateTable` (`[core] fallback estimate`); `app/result/[id]/page.tsx`: `try/catch` sets `served = null`, and `components/result-view.tsx` renders `ErrorState` with `retryPlan` |
+| 5 | `/result/live` | `components/result-view.tsx`: one effect decodes `groupFromHash(window.location.hash)`, `useMemo` calls `solvePlan` in the browser | `components/result-view.tsx`: `EmptyState` ("Nobody is in this link yet", CTA `/join/area`) when the fragment is missing or empty; `EmptyState` ("No table fits everyone", CTA `/join/budget`) when no venue fits |
+| 6 | `/about` | `app/about/page.tsx`: static seed constants, no request | `app/about/page.tsx`: `EmptyState` "No peer yet" in `#peer`, CTA `/join/area`; render errors go to `app/error.tsx` |
+
+**Result route choice.** `app/result/[id]/page.tsx` had `generateStaticParams`, which prerenders the seeded ids at build time and would make one OSRM call per id during `next build` in real mode. It was removed and replaced by `export const dynamic = "force-dynamic"`, so no network call happens at build time and every request solves once (cached 10 minutes per instance). `app/result/[id]/loading.tsx` streams its `Skeleton` while the solve runs.
+
+**Two-level label.** `ServedPlan` (`lib/adapter.ts`) carries `plan`, `source` (the adapter that actually answered) and `fellBack`. `components/result-view.tsx` maps that to five source lines: `live`, `estimate` (OSRM failed inside the real adapter), `fallback` (the real adapter threw), `sample` (fake mode) and `fragment`. `/api/plan` returns `ok: true` with `source: "fake"` after a fallback; only invalid input gets `ok: false`.
+
+**Idempotency.** Key: `participantKey(name)` (NFC, trimmed, inner whitespace collapsed, lowercased). Write: `upsertParticipant`. Both live in `lib/participant-key.ts`, which has no path aliases so `node:test` can load it, and are re-exported and named in `lib/codec.ts` (line 104 and the comment above it). The old key was `name.toLowerCase()` without a trim, so " Deniz" and "Deniz" were two rows; fixed. `website_add_my_constraints` in `components/agent-bridge.tsx` and the join flow's final button both go through it. Test: `tests/codec.test.mjs`.
+
+**Pending binding.** `parsePending` is bound to `disabled` on "Let my agent fill it" (`components/join-flow.tsx` line 248). It is set true before the fetch and false in `finally`; the 20 s timeout only aborts the fetch. On the last step, `pending` (`submitPending || navPending`) is bound to `disabled` on "Add me to the link" (line 323). `submitPending` resets in `finally`. The write itself is synchronous (it rewrites the fragment), so the window it guards is short; `navPending` from `useTransition` keeps the button disabled during the route change to `/result/live`.
+
+**Cache and fixture.** `/api/parse` validates `{ text, byok? }` with `parseInputSchema` (`lib/schemas.ts`: trimmed, 1 to 280 characters) and returns `invalid_input` on failure. It looks up `sentenceKey(text)` (`lib/cache.ts`: `parse:` plus sha1 of `normalizeSentence`) before calling a provider and stores every answer, so the same sentence gets the same answer for 10 minutes per instance. On provider failure or timeout, `parseConstraints` returns `fallbackParse(text)`: the committed `fixtures/parse/sample.json` (statically imported, Kadıköy, vegetarian, 19:00, 400) when the text is `SAMPLE_SENTENCE`, the rule parser otherwise. The response shape is identical; the join flow renders the same green badge and only the "Read by" note changes. The BYOK key is never cached or logged; the sentence is never logged.
+
+**Performance.** `/result/friday-supper` in real mode waits on at most one OSRM `table` request on a cold cache (8 s timeout plus one retry, then the estimate). Its estimate table and the seed table are already precomputed in `lib/data/seed.ts` and `lib/adapter-real.ts`, so no step needs more precomputing. `components/result-view.tsx` has one `useEffect` (fragment decode, line 90) and the only `fetch` is in `retryPlan` (line 107), which runs from the ErrorState button. `SceneSlot` and `BrandMark` now use `next/image`; SVG files render with `unoptimized`, uploaded PNGs are optimized. No `<img` is left in `app/` or `components/`.
+
+**States per route.**
+
+| Route | Skeleton | ErrorState (retry) | EmptyState (CTA) |
+| --- | --- | --- | --- |
+| `/` | `app/loading.tsx` | `app/error.tsx` (`reset`) | the page renders from seed constants and has no empty case; the empty branch for the site is `/about` `#peer` |
+| `/join/[step]` | `app/join/loading.tsx` | `components/join-flow.tsx`: parse failure or timeout, Retry plus "Use the steps instead" to `/join/diet` | `components/join-flow.tsx`: live preview with nobody in the table, CTA "Type the sample sentence" |
+| `/result/[id]` | `app/result/[id]/loading.tsx`, plus `Skeleton` in `result-view.tsx` while the fragment is read | `components/result-view.tsx`: server solve failed or retry failed, Retry calls `retryPlan` | `components/result-view.tsx`: empty fragment (CTA `/join/area`) and no fit (CTA `/join/budget`) |
+| `/about` | `app/loading.tsx` | `app/error.tsx` (`reset`) | `app/about/page.tsx`: "No peer yet" in `#peer`, CTA `/join/area` |
+
+**Tests command.** `npm test` now runs `tests/*.test.mjs` (the README proof showed `tests/` failing on Node 22, as section 7 predicted). `scripts/proof.mjs` lists the same files with `readdirSync`, because `spawnSync` has no shell to expand the glob.
+
+**Manifest honesty.** `public/agent-manifest.json` and `public/mesora.network.json` were read and checked against `siteActions`: the three action names and the parameters `name`, `district`, `diet`, `budget_try`, `earliest` match, and the district enum matches `DISTRICT_ORDER`. No JSON change was needed. They are still hand-written placeholders, not validated by `build_network.mjs --check`.
+
+### Failed attempts
+
+None (nothing could be executed in this session).
+
+### Files changed
+
+New: `components/ui/states.tsx`, `app/loading.tsx`, `lib/participant-key.ts`, `tests/codec.test.mjs`, `fixtures/parse/sample.json`, `scripts/demo-reset.mjs`, `.farm-commits.json` (not committed).
+Edited: `lib/adapter.ts`, `app/api/plan/route.ts`, `app/result/[id]/page.tsx`, `components/result-view.tsx`, `app/join/loading.tsx`, `app/result/[id]/loading.tsx`, `app/error.tsx`, `app/about/page.tsx`, `components/join-flow.tsx`, `components/agent-bridge.tsx`, `lib/codec.ts`, `lib/schemas.ts`, `lib/cache.ts`, `lib/agent/parse-constraints.ts`, `app/api/parse/route.ts`, `components/scene-slot.tsx`, `components/brand-mark.tsx`, `scripts/seed.mjs`, `scripts/proof.mjs`, `package.json`, `README.md`, `.env.example`, `HANDOFF.md`.
+Unchanged on purpose: `.farm-live.json` (still `requiredEnv: []`, `optionalEnv: ["OTARI_API_KEY", "OPENROUTER_API_KEY"]`; `PROOF_BASE_URL` is proof only), `public/agent-manifest.json`, `public/mesora.network.json`.
+
+### Commands run
+
+None. The agent cannot run commands.
+
+### Unmet or partly met items (honesty check)
+
+- Build, tests, seed, demo reset and proof are unverified until the runner runs them. The README `demo-path` block says "Not run in this build: PROOF_BASE_URL not set." until `npm run proof` runs with the variable set.
+- "Live source on first paint" for `/result/friday-supper` holds only with `ADAPTER_MODE=real` on the deployment and OSRM answering; with the default `fake` the line reads "Sample data", which is honest but not the demo line.
+- Step 1 (`/`) is deliberately not on live minutes: the pinned scene keeps the seed 74 vs 38 so the story frame never changes. Its "fallback" is the `?? listGroups()[0]` group fallback and the `pick ? ... : null` guard, which are thin.
+- `app/loading.tsx` shows a rounded panel during a slow transition to `/`; L1 bans cards in the first viewport of the finished page, and the skeleton is only visible before the page arrives.
+- The last step's write is synchronous, so `submitPending` alone is true for one tick; the double click guard that matters is the idempotent `upsertParticipant` plus `navPending`.
+- The `/api/plan` retry after a fallback cannot tell a fallback from fake mode (the API has no `fellBack` field), so after a retry it reads "Sample data" rather than "the live engine failed".
+- The parse cache is per serverless instance; two cold instances may each call the provider once for the same sentence. A provider can also answer a sentence differently on two cold instances; the 10 minute cache only pins the answer per instance.
+- The spec runtime file `/agentic/runtime.js` is still not in the repo (see the manual checklist).
+- Not checked in a real browser or at 375px.
+
+### Open questions
+
+- Should the `/api/plan` envelope carry `fellBack` so a retry can keep the "live engine failed" wording?
+- Should the no-key path also use the fixture for the sample sentence (it does now), or should only a provider failure do that?
+
+### Next best step
+
+Phase 4: Overpass venues with opening_hours.js behind the same adapter (seed venues as the fallback inside `solveWithFallback`), the Leaflet map on `/result/[id]`, and K2 signature 3 ("Compare with midpoint") on the live numbers. Before that, a person runs the Stage One checklist below.
+
+### Manual checklist (needs a person)
+
+1. OSRM terms: confirm the public OSRM server's usage policy before judging (18 January 2027), or set `OSRM_BASE_URL` to a self-hosted OSRM.
+2. Stage One runtime vendoring. **The runtime file is still not in the repo.**
+   1. Open https://github.com/cognizant-ai-labs/agentic-web, find the last commit on or before 11 November 2026, and pin its hash in README under "How it uses the open agentic web spec".
+   2. Run the agentify-website skill at that commit to vendor `public/agentic/runtime.js` and the bridge, and wire the bridge to `siteActions` in `components/agent-bridge.tsx` (keep the three action names).
+   3. Deploy, then run `node build_network.mjs --check` against the deployed URL and paste its output in README.
+3. Three-cycle walk: in a private window on the live URL with `ADAPTER_MODE=real`, walk DEMO.md steps 1 to 6 three times. Expect identical results, no step over 5 seconds, "Live source" on `/result/friday-supper` and no "Sample data" flash.
+4. Failure walk: set a bad `OSRM_BASE_URL` (or block OSRM) once and open `/result/friday-supper`. Expect the page to render with the "Estimated" line.
+5. Run `PROOF_BASE_URL=<deployed url> npm run proof` and check the `demo-path` block shows three identical answers and no call over 5 seconds.
