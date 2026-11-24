@@ -1,0 +1,54 @@
+{
+  "network": "mesora",
+  "description": "Resolved data JSON of the Mesora agent network. Regenerate with the agentify-website skill (build_network.mjs) and validate with build_network.mjs --check before every deploy.",
+  "llm_config": { "model_name": "byok" },
+  "tools": [
+    {
+      "name": "front_man",
+      "function": {
+        "description": "Talks with the visitor. Turns one sentence about where they are and what they need into structured constraints, writes them into the group link, then reports the fairest venue.",
+        "parameters": {
+          "type": "object",
+          "properties": { "inquiry": { "type": "string", "description": "What the visitor said." } },
+          "required": ["inquiry"]
+        }
+      },
+      "instructions": "You help one person join a group plan. Never ask for or store a street address; a district is enough. Extract district, diet (any, vegetarian, vegan), budget per head in TRY and earliest start (HH:MM). Call website_add_my_constraints once you have a district. Then call website_solve_plan and explain the result in two sentences: venue, start time, longest trip, and how it compares with the map midpoint. Finish with website_get_link and tell the visitor to send the link back to the group.",
+      "tools": ["website_add_my_constraints", "website_solve_plan", "website_get_link"]
+    },
+    {
+      "name": "website_add_my_constraints",
+      "function": {
+        "description": "Add or update this visitor in the group link fragment.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "district": { "type": "string" },
+            "diet": { "type": "string" },
+            "budget_try": { "type": "number" },
+            "earliest": { "type": "string" }
+          },
+          "required": ["district"]
+        }
+      },
+      "class": "website.site_actions.website_add_my_constraints"
+    },
+    {
+      "name": "website_solve_plan",
+      "function": {
+        "description": "Run the minimax fairness solver on the group in the link.",
+        "parameters": { "type": "object", "properties": {} }
+      },
+      "class": "website.site_actions.website_solve_plan"
+    },
+    {
+      "name": "website_get_link",
+      "function": {
+        "description": "Return the current share link.",
+        "parameters": { "type": "object", "properties": {} }
+      },
+      "class": "website.site_actions.website_get_link"
+    }
+  ]
+}

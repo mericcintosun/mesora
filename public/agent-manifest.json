@@ -1,0 +1,39 @@
+{
+  "schema_version": "0.3",
+  "name": "Mesora",
+  "description": "Group meetup planner. Each person's agent adds a rough area, diet, budget and earliest start to a shared link; a deterministic minimax solver picks the venue and time with the shortest longest trip. Group state lives in the URL fragment only.",
+  "url": "https://mesora.vercel.app",
+  "network": "/mesora.network.json",
+  "runtime": "/agentic/runtime.js",
+  "entry_agent": "front_man",
+  "capabilities": [
+    {
+      "name": "website_add_my_constraints",
+      "description": "Add or update one participant in the group link: district, diet, budget per head in TRY, earliest start time.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "district": { "type": "string", "enum": ["kadikoy", "besiktas", "bakirkoy", "atasehir", "uskudar", "sisli", "fatih", "beyoglu", "maltepe", "sariyer"] },
+          "diet": { "type": "string", "enum": ["any", "vegetarian", "vegan"] },
+          "budget_try": { "type": "number" },
+          "earliest": { "type": "string", "pattern": "^\\d{2}:\\d{2}$" }
+        },
+        "required": ["district"]
+      }
+    },
+    {
+      "name": "website_solve_plan",
+      "description": "Solve the group in the current link and return venue, start time, every person's trip in minutes and the geographic-midpoint comparison.",
+      "parameters": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "website_get_link",
+      "description": "Return the current share link with the group encoded in its fragment.",
+      "parameters": { "type": "object", "properties": {} }
+    }
+  ],
+  "peer_callable": true,
+  "privacy": "Locations are rounded to geohash precision 5 and never sent to the Mesora host.",
+  "llm": { "byok": true, "providers": ["otari", "openrouter"], "keyless_path": "/join/area" }
+}

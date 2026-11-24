@@ -1,0 +1,158 @@
+// Turns one free-text sentence ("I'm in Kadıköy, vegetarian, after 19:00, 400 lira max")
+// into structured constraints for website_add_my_constraints.
+//
+// Priority chain, one function, all paths return the same shape:
+//   1. Mozilla Otari (OTARI_API_KEY) or OpenRouter (OPENROUTER_API_KEY), or a visitor's own
+//      key passed per request (BYOK). This is the submission path the demo video must show.
+//   2. The developer's local `claude` CLI, for zero-key local development.
+//   3. A deterministic rule parser, so the product never breaks without a key.
+import { DISTRICTS, type Diet, type DistrictId } from "@/lib/data";
+
+export interface ParsedConstraints {
+  district: DistrictId | null;
+  diet: Diet;
+  budgetTry: number | null;
+  earliest: string | null;
+}
+
+export type ParseSource = "otari" | "openrouter" | "claude-cli" | "rules";
+
+export interface ByokKey {
+  provider: "otari" | "openrouter";
+  key: string;
+}
+
+const SYSTEM_PROMPT = `You extract meetup constraints for a group dinner planner in Istanbul.
+Return ONLY a JSON object with keys:
+district: one of ${DISTRICTS.map((d) => `"${d.id}"`).join(", ")} or null,
+diet: "any" | "vegetarian" | "vegan",
+budgetTry: number (Turkish lira per head) or null,
+earliest: "HH:MM" 24h earliest start time or null.
+Never include street addresses.`;
+
+function fold(s: string): string {
+  return s
+    .toLocaleLowerCase("tr")
+    .replace(/ı/g, "i")
+    .replace(/ş/g, "s")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c");
+}
+
+/** Path 3: deterministic rules. Also used to fill gaps an LLM leaves. */
+export function parseWithRules(text: string): ParsedConstraints {
+  const t = fold(text);
+  const district = DISTRICTS.find((d) => t.includes(fold(d.name)) || t.includes(d.id))?.id ?? null;
+  const diet: Diet = /vegan/.test(t) ? "vegan" : /vegetar|vejetar|no meat|etsiz/.test(t) ? "vegetarian" : "any";
+  const money = t.match(/(\d{2,5})\s*(tl|lira|try|₺)/) ?? t.match(/(?:max|under|budget|up to)\s*(\d{2,5})/);
+  const time = t.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/);
+  return {
+    district,
+    diet,
+    budgetTry: money ? Number(money[1]) : null,
+    earliest: time ? `${time[1].padStart(2, "0")}:${time[2]}` : null,
+  };
+}
+
+function coerce(raw: unknown, fallback: ParsedConstraints): ParsedConstraints {
+  if (!raw || typeof raw !== "object") return fallback;
+  const r = raw as Record<string, unknown>;
+  const district = DISTRICTS.find((d) => d.id === r.district)?.id ?? fallback.district;
+  const diet = r.diet === "vegan" || r.diet === "vegetarian" || r.diet === "any" ? r.diet : fallback.diet;
+  const budgetTry = typeof r.budgetTry === "number" && r.budgetTry > 0 ? Math.round(r.budgetTry) : fallback.budgetTry;
+  const earliest = typeof r.earliest === "string" && /^\d{2}:\d{2}$/.test(r.earliest) ? r.earliest : fallback.earliest;
+  return { district, diet, budgetTry, earliest };
+}
+
+function extractJson(text: string): unknown {
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try {
+    return JSON.parse(m[0]);
+  } catch {
+    return null;
+  }
+}
+
+/** Path 1: an OpenAI-compatible chat completion on Otari or OpenRouter. */
+async function callChat(baseUrl: string, key: string, model: string, text: string): Promise<string> {
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: text },
+      ],
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) throw new Error(`LLM ${res.status}`);
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
+let claudeAvailable: boolean | null = null;
+
+/** Path 2: the local `claude` CLI, detected once with `claude --version`. */
+async function callClaudeCli(text: string): Promise<string | null> {
+  if (process.env.VERCEL) return null;
+  const { spawn, spawnSync } = await import("node:child_process");
+  if (claudeAvailable === null) {
+    try {
+      claudeAvailable = spawnSync("claude", ["--version"], { timeout: 4000 }).status === 0;
+    } catch {
+      claudeAvailable = false;
+    }
+  }
+  if (!claudeAvailable) return null;
+  return new Promise((resolve) => {
+    const child = spawn("claude", ["-p", "--output-format", "text", "--model", "haiku"], { stdio: ["pipe", "pipe", "ignore"] });
+    let out = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve(null);
+    }, 30_000);
+    child.stdout?.on("data", (c: Buffer) => (out += c.toString()));
+    child.on("close", () => {
+      clearTimeout(timer);
+      resolve(out || null);
+    });
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+    child.stdin?.write(`${SYSTEM_PROMPT}\n\nSentence: ${text}`);
+    child.stdin?.end();
+  });
+}
+
+export async function parseConstraints(text: string, byok?: ByokKey): Promise<{ constraints: ParsedConstraints; source: ParseSource }> {
+  const rules = parseWithRules(text);
+
+  const otariKey = byok?.provider === "otari" ? byok.key : process.env.OTARI_API_KEY;
+  const routerKey = byok?.provider === "openrouter" ? byok.key : process.env.OPENROUTER_API_KEY;
+
+  try {
+    if (otariKey && process.env.OTARI_BASE_URL) {
+      const out = await callChat(process.env.OTARI_BASE_URL, otariKey, process.env.OTARI_MODEL ?? "alibaba/qwen3.8-flash", text);
+      return { constraints: coerce(extractJson(out), rules), source: "otari" };
+    }
+    if (routerKey) {
+      const model = process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.3-70b-instruct:free";
+      const out = await callChat("https://openrouter.ai/api/v1", routerKey, model, text);
+      return { constraints: coerce(extractJson(out), rules), source: "openrouter" };
+    }
+  } catch {
+    // fall through to the local paths
+  }
+
+  const cli = await callClaudeCli(text);
+  if (cli) return { constraints: coerce(extractJson(cli), rules), source: "claude-cli" };
+
+  return { constraints: rules, source: "rules" };
+}
