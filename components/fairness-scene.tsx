@@ -91,7 +91,7 @@ export function FairnessScene({ rows, midpointName, midpointLongest, pickName, p
 
       <ul className="space-y-4 rounded-3xl border-2 border-border bg-card p-6 sm:p-8">
         {rows.map((r, i) => (
-          <li key={r.name} className="grid grid-cols-[7rem_1fr_4.5rem] items-center gap-4 sm:grid-cols-[10rem_1fr_5rem]">
+          <li key={r.name} className="grid grid-cols-[6.5rem_minmax(0,1fr)_4.5rem] items-center gap-3 sm:grid-cols-[10rem_minmax(0,1fr)_5rem] sm:gap-4">
             <span className="leading-tight">
               <span className="block font-bold">{r.name}</span>
               <span className="text-sm text-muted-foreground">{r.districtName}</span>

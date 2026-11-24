@@ -66,7 +66,7 @@ function ShareLinkButton({ group }: { group: GroupLike }) {
         {copied === "ok" ? "Link copied, paste it in the group chat" : "Copy the group link"}
       </Button>
       {/* A plain anchor keeps the #g= fragment, which only the browser ever reads. */}
-      <Button asChild size="lg" variant="ghost">
+      <Button asChild size="lg" variant="ghost" className="max-w-full whitespace-normal">
         <a href={`/result/live${hashFor(group.title, group.participants)}`}>Open it as a friend would</a>
       </Button>
       {copied === "fail" && <Badge variant="destructive">Clipboard blocked. Copy the address bar instead.</Badge>}

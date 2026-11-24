@@ -19,10 +19,11 @@ const buttonVariants = cva(
           "border-2 border-border bg-card text-foreground hover:border-primary aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground",
       },
       size: {
-        default: "h-10 px-5 text-sm",
+        // 44px minimum touch target on every demo-path control (h-11).
+        default: "h-11 px-5 text-sm",
         sm: "h-8 px-3.5 text-xs",
         lg: "h-12 px-7 text-base",
-        icon: "h-10 w-10",
+        icon: "h-11 w-11",
       },
     },
     defaultVariants: { variant: "default", size: "default" },
