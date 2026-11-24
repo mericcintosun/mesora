@@ -2,33 +2,16 @@
 // picks the venue whose LONGEST trip is shortest, then breaks ties on total minutes.
 // It also computes what a plain geographic-midpoint tool would have picked, so
 // the plan screen can show the difference.
-import { DISTRICT_ORDER, VENUES, getDistrict, type Participant, type Venue } from "@/lib/data";
+import { getDistrict } from "@/lib/data";
+import { VENUES } from "@/lib/data/seed";
+import { DISTRICT_ORDER, type Candidate, type Participant, type PlanView, type Venue } from "@/lib/types";
+
+export type { Candidate, Leg } from "@/lib/types";
+/** The solver's output; the same shape the adapter and API return as PlanView. */
+export type Plan = PlanView;
 
 /** How long the group expects to stay; the venue must be open the whole time. */
 export const STAY_MINUTES = 120;
-
-export interface Leg {
-  name: string;
-  districtName: string;
-  minutes: number;
-}
-
-export interface Candidate {
-  venue: Venue;
-  legs: Leg[];
-  longest: number;
-  total: number;
-  excluded: string | null;
-}
-
-export interface Plan {
-  start: string;
-  candidates: Candidate[];
-  pick: Candidate | null;
-  midpoint: Candidate;
-  /** "seed" while travel minutes come from the cached table, "osrm" once live. */
-  travelSource: "seed" | "osrm" | "estimate";
-}
 
 function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);

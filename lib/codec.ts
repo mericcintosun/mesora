@@ -2,7 +2,8 @@
 // The fragment is never sent to a server with the HTTP request, so nobody's
 // rough location or budget leaves the browsers that hold the link.
 import LZString from "lz-string";
-import { DISTRICT_ORDER, getDistrict, type Diet, type DistrictId, type Group, type Participant } from "@/lib/data";
+import { getDistrict } from "@/lib/data";
+import { DISTRICT_ORDER, type Diet, type DistrictId, type Group, type Participant } from "@/lib/types";
 
 export const MAX_PEOPLE = 8;
 
