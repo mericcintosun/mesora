@@ -38,8 +38,17 @@ The new idea here is multi-person coordination: each friend's agent runs in a di
 - Tailwind CSS 4, with small primitives built on class-variance-authority and Radix Slot
 - GSAP 3 with ScrollTrigger (through @gsap/react) for the pinned before/after scene on the home page
 - lz-string for the fragment codec, plus a built-in geohash encoder
+- zod for request validation at the edge of the JSON routes
+- OSRM `table` service (the keyless public server by default) for driving minutes
+- Node's built-in test runner (`node:test`) with type stripping for the travel tests
 
-Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read data through one adapter in `lib/adapter.ts`. `ADAPTER_MODE=fake`, the default, uses the seeded Istanbul data in `lib/data/seed.ts`.
+Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read data through one adapter in `lib/adapter.ts`.
+
+## Real vs sample data
+
+`ADAPTER_MODE` picks the adapter, and `lib/config.ts` is the only file that reads it. `fake`, the default, uses the seeded Istanbul data in `lib/data/seed.ts` with its cached travel table. `real` asks OSRM for driving minutes from each district center to each venue, in one `table` request per solve, cached in memory for ten minutes. If OSRM does not answer within 8 seconds plus one retry, Mesora estimates straight-line km x 1.4 at 25 km/h, sets `travelSource: "estimate"` and the result page says so. In both modes the venues, groups, diet flags, prices and opening hours are still the sample list in `lib/data/seed.ts`, and only district centers go to OSRM, never a name or an exact location. `/result/live` always solves in the browser from the link and calls no API.
+
+Every failure from `/api/groups/[id]` and `/api/plan` has the shape `{ "ok": false, "error": "<code>", "hint": "<one readable line>" }`. The codes are `invalid_input`, `upstream_timeout`, `upstream_error`, `parse_failure` and `not_configured` (`lib/errors.ts`). A successful `/api/plan` answer carries `source` (`fake` or `real`) and `data.travelSource` (`seed`, `osrm` or `estimate`).
 
 ## Quickstart
 
@@ -47,16 +56,43 @@ Pages and the JSON routes (`/api/groups`, `/api/groups/[id]`, `/api/plan`) read 
 npm install
 cp .env.example .env.local   # optional, every key is optional
 npm run seed   # prints the seed summary, writes nothing
+npm test       # node:test suite for the travel helpers (Node 22.6 or newer)
+npm run proof  # one live OSRM call plus the test run, written into the Proof section below
 npm run dev
 ```
+
+Set `ADAPTER_MODE=real` in `.env.local` to see live OSRM minutes on `/result/friday-supper`. `OSRM_BASE_URL` can point at a self-hosted OSRM.
 
 Open http://localhost:3000, press "Add yourself to Friday supper" and type the sample sentence, or click through the four steps.
 
 Agent paths, in order: Otari when `OTARI_API_KEY` and `OTARI_BASE_URL` are set, then OpenRouter when `OPENROUTER_API_KEY` is set, then your local `claude` CLI in development, then a deterministic rule parser. The recorded demo must run the Otari or OpenRouter path.
 
+## Proof
+
+`npm run proof` rewrites the two blocks below. The files in `fixtures/osrm/` are hand-written examples of the OSRM table response shape for the unit tests, not recordings of real calls; the live numbers are only the ones in the OSRM block.
+
+### OSRM table call
+
+<!-- PROOF:BEGIN osrm -->
+Run on 2026-11-24 against https://router.project-osrm.org (driving profile), one `table` request, latency 292 ms.
+
+| From district center | Harem Sahil Çay Bahçesi | Yenikapı Avlu Mutfak |
+| --- | --- | --- |
+| Kadıköy | 8 min | 12 min |
+| Beşiktaş | 18 min | 13 min |
+| Bakırköy | 25 min | 12 min |
+| Ataşehir | 14 min | 18 min |
+<!-- PROOF:END osrm -->
+
+### Tests
+
+<!-- PROOF:BEGIN tests -->
+Run on 2026-11-24 with `node --experimental-strip-types --test tests/` on Node 22.23.3: 0 passed, 1 failed.
+<!-- PROOF:END tests -->
+
 ## What we would build next
 
-1. Live venues from Overpass and live trip times from OSRM, with a distance estimate labelled "estimated" when OSRM is slow.
+1. Live venues from Overpass with opening hours parsed by opening_hours.js (trip times already come from OSRM in real mode).
 2. A Leaflet map with every friend's cell and the candidate venues, greying out the ones a filter dropped.
 3. A small companion event site that calls Mesora as a peer and shows the approval card.
 4. Publishing the fragment codec and the minimax solver as an npm package so other planners can reuse them.

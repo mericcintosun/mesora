@@ -57,10 +57,10 @@ Header nav (`components/site-nav.tsx`, rendered by `components/site-header.tsx`)
 - `lib/types.ts`: every shared type (`District`, `Venue`, `Participant`, `Group`, `Diet`, `Side`, `DistrictId`, `Leg`, `Candidate`, `PlanView`, `ApiResponse<T>`) plus the `DISTRICT_ORDER` tuple the `DistrictId` union is built from.
 - `lib/data/seed.ts`: the only home of seed values: 10 Istanbul districts, 10 venues with a cached transit-minute table, groups `friday-supper` (4) and `sunday-brunch` (5), `OPEN_INVITE` (Friday without Deniz), `SAMPLE_SENTENCE`, `TIME_OPTIONS`, `BUDGET_OPTIONS`, `DIET_OPTIONS`. Fixed ids, no clock, no randomness.
 - `lib/data.ts`: thin re-export of the types and seed, plus `getGroup` and `getDistrict`. Kept so existing imports work.
-- `lib/adapter.ts`: `MesoraAdapter`, `fakeAdapter`, `getAdapter()` (reads `ADAPTER_MODE`, defaults to `fake`; `real` returns the fake adapter until Phase 2). Server pages (`/`, `/result/[id]`) and `app/api/groups`, `app/api/groups/[id]`, `app/api/plan` read through it.
+- `lib/adapter.ts`: `MesoraAdapter`, `fakeAdapter`, `getAdapter()` (reads `ADAPTER_MODE` from `lib/config.ts`, defaults to `fake`; `real` returns `realAdapter` from `lib/adapter-real.ts`, live OSRM minutes since Phase 2). Server pages (`/`, `/result/[id]`) and `app/api/groups`, `app/api/groups/[id]`, `app/api/plan` read through it.
 - `scripts/seed.mjs`: deterministic seed checker behind `npm run seed`.
 - `lib/codec.ts`: fragment codec (lz-string), geohash-5 encoder, `upsertParticipant`, 8 person cap. Real.
-- `lib/solver.ts`: minimax solver with diet, budget and opening-hours filters plus geographic-midpoint baseline. Real. **Mock:** `travelMinutes()` reads the seed table; swap for OSRM.
+- `lib/solver.ts`: minimax solver with diet, budget and opening-hours filters plus geographic-midpoint baseline. Real. `solvePlanWith(people, venues, minutesFn, source)` takes the travel source; `solvePlan` uses the seed table (`travelMinutes()`), the real adapter passes OSRM minutes.
 - `lib/agent/parse-constraints.ts`: `parseConstraints()` priority chain: Otari, OpenRouter (env or BYOK), local `claude` CLI, rule parser. Real calls when keys are set.
 - `app/api/parse/route.ts`: POST endpoint for the sentence parser. Receives the sentence only, never the link.
 - `components/agent-bridge.tsx`: `siteActions` (`website_add_my_constraints`, `website_solve_plan`, `website_get_link`) registered on `window.mesoraSiteActions`. The join flow's final button calls the same action.
@@ -156,4 +156,67 @@ None, the agent cannot run commands; the runner builds.
 
 ### Next best step
 
-Phase 2: run the agentify-website skill to generate the manifest, network JSON, browser runtime and bridge; wire the bridge to `siteActions`; build the real adapter (OSRM table and Overpass, seed as fallback) behind `getAdapter()` with `ADAPTER_MODE=real`; write `.farm-live.json`.
+Phase 2: run the agentify-website skill to generate the manifest, network JSON, browser runtime and bridge; wire the bridge to `siteActions`; build the real adapter (OSRM table and Overpass, seed as fallback) behind `getAdapter()` with `ADAPTER_MODE=real`; write `.farm-live.json`. (Superseded: Phase 2 took the OSRM part only, see section 7.)
+
+## 7. Phase 2: real travel times behind the adapter
+
+### Goal
+
+`ADAPTER_MODE=real` serves live OSRM driving minutes from district centers to the seed venues through the existing minimax solver, with an honest estimate fallback, zod validation at `/api/plan`, one error taxonomy, and a result page that says in words where its minutes came from.
+
+### Status
+
+All five slices are written. Nothing was built, tested or run by the agent. `npm install`, `npm run build`, `npm test`, `npm run seed` and `npm run proof` are the runner's checks and are **unverified**. The 2 h checkpoint ("`/api/plan` returns live OSRM minutes at least once") can only be confirmed by the runner with `ADAPTER_MODE=real` and network.
+
+**What went real:** travel minutes (OSRM `table`, one request per solve, cached 10 minutes in memory per server instance).
+**Still fixtures:** venues, groups, diet flags, budgets, prices and opening hours (`lib/data/seed.ts`); the agent manifest and network JSON placeholders; the peer step on `/about`; the pinned scene on `/` (deliberately stays on the seed table, 74 vs 38).
+
+### Decisions
+
+- **Real mode never fails loudly on an upstream outage.** `lib/upstream.ts` gives OSRM 8 s (`UPSTREAM_TIMEOUT_MS`) plus exactly one retry (`UPSTREAM_RETRIES`). After that, `lib/adapter-real.ts` logs `[core] fallback estimate`, computes haversine km x 1.4 at 25 km/h for every cell, sets `travelSource: "estimate"` and caches that result too. The result page then reads "Estimated: ...". If OSRM answers but leaves some cells null, those cells are estimated and the whole plan is labelled `estimate`, so the screen never overclaims.
+- **"Driving minutes":** the public OSRM server only has the car profile, so the source line says "driving minutes between district centers", not transit.
+- **Live-fragment privacy rule:** `/result/live` never calls `/api/plan`; it solves in the browser on the seed table, because its group lives in the `#g=` fragment. Seeded groups (`friday-supper`, `sunday-brunch`) POST only `district`, `diet`, `budgetTry` and `earliest`; names are put back in the browser by position (`withNames` in `components/result-view.tsx`). OSRM only ever sees district centroids and seed venue coordinates.
+- **Home scene stays seed:** `app/page.tsx` now calls `solvePlan(friday.participants, await adapter.listVenues())` instead of `adapter.solve`, so step 1 of DEMO.md shows the fixed 74 vs 38 in every mode and the static home page makes no network call at build time.
+- **Config boundary:** `lib/config.ts` is the only reader of `process.env` (plus `next.config.ts` and the build-time `NEXT_PUBLIC_BRAND_FILES` in `lib/brand-files.ts`). `parse-constraints.ts` imports its Otari, OpenRouter and `VERCEL` values from there, and its LLM call now goes through `fetchJson`, so it also gets the 8 s timeout and one retry (it had 10 s before).
+- **Error shape:** `ApiResponse<T>` failure arm is `{ ok: false, error: ErrorCode, hint }`. `/api/groups/[id]` maps "no such group" to `invalid_input` (still HTTP 404). `/api/parse` keeps its own shape.
+- **zod schema defaults:** missing `diet`, `budgetTry` or `earliest` default to `any`, 400 and `19:00` as before; a bad `district`, a non-positive budget, a malformed time, 0 or more than 8 people get HTTP 400 `invalid_input`.
+- **Cache key** is a sha1 of the sorted unique district ids plus the sorted venue ids; values are stored by id, so input order does not matter. Capped at 200 entries, oldest dropped first.
+- **`.farm-live.json`:** `requiredEnv` is empty because OSRM is keyless and the solver is deterministic; `optionalEnv` is `OTARI_API_KEY` and `OPENROUTER_API_KEY`, both read in `lib/config.ts` and listed in `.env.example`.
+
+### Failed attempts
+
+None (nothing could be executed in this session).
+
+### Files changed
+
+New: `lib/config.ts`, `lib/errors.ts`, `lib/schemas.ts`, `lib/cache.ts`, `lib/upstream.ts`, `lib/travel-core.ts`, `lib/adapter-real.ts`, `tests/travel.test.mjs`, `fixtures/osrm/{friday-4x2,brunch-2x3,null-cell-2x2,no-route,same-point-1x1}.json`, `scripts/proof.mjs`, `.farm-live.json`, `.farm-commits.json`.
+Edited: `lib/types.ts`, `lib/adapter.ts`, `lib/solver.ts`, `lib/agent/parse-constraints.ts`, `app/api/plan/route.ts`, `app/api/groups/[id]/route.ts`, `app/page.tsx`, `app/about/page.tsx`, `components/result-view.tsx`, `.env.example`, `package.json`, `README.md`, `HANDOFF.md`.
+
+### Commands run
+
+None. The agent cannot run commands.
+
+### Unmet or partly met items (honesty check)
+
+- Build, tests, seed and proof are unverified until the runner runs them.
+- `npm test` uses the literal `node --experimental-strip-types --test tests/` from the spec. Node 20 searches a directory argument for test files; on Node 22 and newer the arguments are glob patterns and a bare directory may not match any file. If `npm test` reports 0 tests, change the argument to `tests/*.test.mjs` (in `package.json` and in `scripts/proof.mjs`). Type stripping needs Node 22.6 or newer.
+- "Every fetch call site uses `UPSTREAM_TIMEOUT_MS` and `UPSTREAM_RETRIES`": true for every server call (`lib/upstream.ts`, used by `lib/adapter-real.ts` and `lib/agent/parse-constraints.ts`). The two browser calls to our own routes (`/api/parse` in `components/join-flow.tsx`, `/api/plan` in `components/result-view.tsx`) cannot import `lib/config.ts` (it reads `process.env` and must stay server only); `/api/plan` from the browser has its own 20 s abort. `scripts/proof.mjs` uses its own 8 s timeout and no retry, since it is a plain Node script.
+- The source line and the warn note sit inside the "Trip per person" card, which only renders when a venue fits everyone. A group with no fitting venue shows no source line.
+- During the first moments on `/result/friday-supper` in real mode the page shows the seed plan and the "Sample data" line until `/api/plan` answers; then it switches to the live plan.
+- The memory cache is per serverless instance, so "stable across two reloads" holds when both reloads hit the same warm instance. OSRM itself is deterministic for the same input, so a cold instance should return the same minutes unless the public server's map data changed.
+- The hex Grep over `app/` still matches `app/icon.svg` (never-touch brand file), `app/globals.css` and the `OG` block in `app/opengraph-image.tsx`, as in Phase 1. None of the files changed in this phase has a hex literal.
+
+### Manual checklist (needs a person)
+
+- Confirm the OSRM public server's usage terms (fair use, no heavy traffic) before the judging period, and consider a self-hosted OSRM URL in `OSRM_BASE_URL`.
+- After `npm run proof`, read the OSRM block in README and check the minutes look plausible for Istanbul.
+- On the deployed `/result/friday-supper` with `ADAPTER_MODE=real`, check the line reads "Live source" and reload twice.
+
+### Open questions
+
+- Should a partly estimated matrix (some null cells) get its own wording? Today it is labelled the same as a full estimate.
+- Should `/api/plan` accept a display name for the Phase 5 peer site? It still drops names.
+
+### Next best step
+
+Phase 3: generate the spec manifest, network JSON, browser runtime and bridge with the agentify-website skill and wire them to `siteActions` (the Stage One gate). Then live venues from Overpass with opening_hours.js, keeping the seed as fallback behind the same adapter, and the "Compare with midpoint" toggle (K2 signature 3) on the now live numbers.
