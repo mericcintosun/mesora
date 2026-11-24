@@ -4,6 +4,19 @@
    (D15 neon: warm black night, acid-yellow tubes, one violet second hue).
    Components never carry a raw hex; they use these variables. */
 :root {
+  /* IDENTITY.md key block, by name. The semantic aliases below repeat the same hexes. */
+  --ground: #121010;
+  --surface: #1b1717;
+  --deep: #262020;
+  --line: #3a3030;
+  --ink: #f6f1ec;
+  --acid: #e8ff3a;
+  --on-accent: #121010;
+  --second: #9b5cff;
+  --state-ok: #69a56f;
+  --state-warn: #e0b84e;
+  --state-bad: #ef6a5a;
+
   --background: #121010;
   --foreground: #f6f1ec;
   --card: #1b1717;
@@ -58,6 +71,31 @@
   --radius-xl: calc(var(--radius) + 8px);
   --font-display: var(--font-sora), "Avenir Next", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-nunito), "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
+
+  /* Named identity colors: bg-ground, bg-surface, bg-deep, border-line, text-ink, bg-acid, text-on-accent, text-second. */
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-deep: var(--deep);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-acid: var(--acid);
+  --color-on-accent: var(--on-accent);
+  --color-second: var(--second);
+
+  /* RADIUS round: 0.75rem and above on every card, panel and control. */
+  --radius-control: 9999px;
+  --radius-card: 0.75rem;
+  --radius-panel: 1.5rem;
+
+  /* Spacing: page gutter and the gap between poster sections. */
+  --spacing-gutter: 1.25rem;
+  --spacing-section: 4rem;
+
+  /* Type scale: the L1 poster headline and the result figure. */
+  --text-display: clamp(3.5rem, 9vw, 8rem);
+  --text-display--line-height: 0.92;
+  --text-figure: clamp(3rem, 7vw, 4.5rem);
+  --text-figure--line-height: 1;
 }
 
 body {
@@ -76,10 +114,18 @@ h2 {
 .mesora-glow {
   box-shadow:
     0 0 0 2px var(--primary),
-    0 0 28px color-mix(in oklab, #e8ff3a 55%, transparent);
+    0 0 28px color-mix(in oklab, var(--primary) 55%, transparent);
 }
 .mesora-glow-text {
-  text-shadow: 0 0 22px color-mix(in oklab, #e8ff3a 60%, transparent);
+  text-shadow: 0 0 22px color-mix(in oklab, var(--primary) 60%, transparent);
+}
+
+/* Visible focus on every link and control that does not style its own. */
+@layer base {
+  :where(a, button, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
 }
 
 /* MOTION M2 slide: translateX(-24px) to 0 plus fade, 550ms. */
