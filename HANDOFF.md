@@ -39,7 +39,7 @@ Identity: see IDENTITY.md (direction D15, structure S3, archetype L1, kit K2)
 | `/` | `app/page.tsx` | L1 poster hero, CTA into the flow, pinned GSAP before/after scene, folded problem prose |
 | `/join/area`, `/join/diet`, `/join/budget`, `/join/time` | `app/join/[step]/page.tsx` + `components/join-flow.tsx` | One question per step, progress indicator, live preview of the table so far, agent sentence box on `area` |
 | `/result/friday-supper`, `/result/sunday-brunch`, `/result/live` | `app/result/[id]/page.tsx` + `components/result-view.tsx` | Venue, start time, trip bars vs midpoint, every venue weighed with its rejection reason, share control. `live` decodes the `#g=` fragment |
-| `/about` | `app/about/page.tsx` | Method, spec actions, peer call placeholder (`#peer`, labelled stub until mission item 5), models and keys |
+| `/about` | `app/about/page.tsx` | Method, spec actions, simulated peer call (`#peer`, `components/peer-call.tsx`, Phase 4), models and keys with the third parties named |
 | `/api/groups`, `/api/groups/[id]`, `/api/plan`, `/api/parse` | `app/api/...` | JSON routes returning `ApiResponse<T>` (parse: `{ ok, constraints, source }`) through `getAdapter()` and `solveWithFallback` |
 
 Header nav (`components/site-nav.tsx`, rendered by `components/site-header.tsx`): Join the plan, Friday's table, Method, with `aria-current="page"` on the active route group. `/result/live` is reachable from the result page's share row ("Open it as a friend would"). Footer links the two JSON files.
@@ -102,7 +102,7 @@ Header nav (`components/site-nav.tsx`, rendered by `components/site-header.tsx`)
 
 ## 5. Definition of done
 
-- Deployed on Vercel at https://mesora.vercel.app, `build_network.mjs --check` passes against it, JSON and runtime reachable with CORS.
+- Deployed on Vercel at https://mesora-three.vercel.app, `build_network.mjs --check` passes against it, JSON and runtime reachable with CORS.
 - README demo link live; Devpost description, screenshots, Otari note filled.
 - The 90 second demo runs end to end: four friends (Kadıköy, Beşiktaş, Bakırköy, Ataşehir), the first types the sample sentence and the agent calls `website_add_my_constraints`; a second window opens the link and sees district-only cards; the fourth person triggers `website_solve_plan`; filtered venues grey out; midpoint 74 min vs Mesora 38 min side by side; an event site's agent calls Mesora as a peer after an approval card and gets the same venue. Closing line: "Nobody gave anyone their address. The decision lives in the link."
 - Wow moment rehearsed at least three times with the real deployment.
@@ -323,3 +323,86 @@ Phase 4: Overpass venues with opening_hours.js behind the same adapter (seed ven
 3. Three-cycle walk: in a private window on the live URL with `ADAPTER_MODE=real`, walk DEMO.md steps 1 to 6 three times. Expect identical results, no step over 5 seconds, "Live source" on `/result/friday-supper` and no "Sample data" flash.
 4. Failure walk: set a bad `OSRM_BASE_URL` (or block OSRM) once and open `/result/friday-supper`. Expect the page to render with the "Estimated" line.
 5. Run `PROOF_BASE_URL=<deployed url> npm run proof` and check the `demo-path` block shows three identical answers and no call over 5 seconds.
+
+## 9. Phase 4: peer call, delivery sheet, responsive pass, privacy and hygiene
+
+### Goal
+
+DEMO.md gains step 7 (an event site's agent asks for consent, calls `website_solve_plan` and gets the same Friday supper plan, 38 vs 74 min), the site works at 360, 768 and 1280 px, DELIVERY.md and SECURITY.md exist, metadata points at the live host, and every privacy sentence says what the code actually sends.
+
+### Status
+
+All seven slices are written. Nothing was built, tested or run by the agent; `npm run build`, `npm test` and `npm run proof` are the runner's checks and are **unverified**. No slice was cut. Slices 1 to 3 (peer call, nav disclosure, DELIVERY.md) were written earlier in this phase's session and were checked against the spec by reading, not rewritten.
+
+### Decisions
+
+- **No sponsor bounty.** `targetTracks` holds only automatic placements (First, Second, Third, Employee Prize). Zero bounty integration rows were added and zero were dropped; README says so in one sentence under the live link, and DELIVERY.md line 6 repeats it.
+- **Peer call is in-page and labelled Simulated.** `components/peer-call.tsx` builds the Friday supper link in the browser (`hashFor` on the seed group, line 40) and calls `siteActions.website_solve_plan({ link })` (line 48), the same solver and seed table as `/result/live`. It does not go through `/api/plan`: the link fragment must stay in the browser, and `website_solve_plan` already decodes it there. No new infrastructure. The 10 s timeout is a `Promise.race` (lines 20 and 65 to 69).
+- **metadataBase** comes from `SITE_URL` in `lib/config.ts` (`NEXT_PUBLIC_SITE_URL`, fallback `https://mesora-three.vercel.app`), so `lib/config.ts` stays the one env reader for app code. The OG and Twitter images come from the file convention `app/opengraph-image.tsx`, which Next merges into `openGraph.images` and `twitter.images` for every route, so `images` is not repeated in the object (repeating it would emit a second og:image tag).
+- **Privacy findings (slice 6), from the code:**
+  - The `#g=` fragment is never sent: `/result/live` and the peer call decode it in the browser (`components/agent-bridge.tsx` line 51, `components/result-view.tsx` line 93).
+  - The typed sentence is POSTed to `/api/parse` (`components/join-flow.tsx` line 141) and forwarded to Otari or OpenRouter when `OTARI_API_KEY` plus `OTARI_BASE_URL`, or `OPENROUTER_API_KEY`, is set (`lib/agent/parse-constraints.ts` lines 165 to 171). It is not logged; the parsed four fields are cached ten minutes by sha1 of the sentence (`app/api/parse/route.ts` lines 36 to 50). A visitor could type a street address into it, so the copy now says "name a district, not a street".
+  - OSRM gets district centroids and seed venue coordinates (`lib/adapter-real.ts` lines 42 to 43, `lib/travel-core.ts` `buildTableUrl`), never names or the fragment.
+  - The link holds a first name, district, the geohash-5 of the **district centroid** (`lib/codec.ts` line 14 and 58), diet, budget and time. The old home copy said "rounds your spot to a 5 km geohash cell"; there is no "spot", so it was rewritten.
+  - One-line fix applied: `lib/adapter-real.ts` logged the district ids and venue ids of every OSRM table call (`table ok districts=kadikoy,...`), against its own comment "Logs carry counts only". It now logs counts.
+  - Rewritten copy: home hero and "Why your address stays home" (`app/page.tsx`), footer (`app/layout.tsx`), `/about` "Your agent, your browser, your key", spec paragraph and "Models and keys" with a four-line list naming our server, Otari or OpenRouter, the OSRM public server and "Nobody: the link fragment" (`app/about/page.tsx`), the agent box description (`components/join-flow.tsx`), README "Privacy: what leaves the browser", OG claim line (`app/opengraph-image.tsx` line 39, text only), `public/agent-manifest.json` `privacy` and `url` (was `mesora.vercel.app`).
+- **Stack honesty.** README and `/about` no longer say the spec runtime runs in the browser or that the visitor's own key is used (the join flow sends no BYOK key). README lists versions from `package.json` and names Leaflet, opening_hours.js, ngeohash, Overpass client and the runtime as not installed or built.
+- **Footer Source link** to the repo, `target="_blank"` with `rel="noopener noreferrer"` (`app/layout.tsx` lines 62 to 68).
+
+### Contract front and wallet greps (slice 5)
+
+Contract front skipped, no `contracts/` (Glob `contracts/**`: no files); wallet rules verify vacuously. Grep over `app/`, `components/`, `lib/` for `eth_requestAccounts|eth_sign|personal_sign|ethereum|wagmi|viem|ethers`: no matches. `SECURITY.md` written with the four sections.
+
+### Hygiene sweep (slice 7), greps and results
+
+- `sk-|PRIVATE_KEY|otk_[A-Za-z0-9]|[0-9a-f]{64}|[A-Za-z0-9+/]{80,}` in `app/ components/ lib/ public/` (ts, tsx, css, json, js): no matches.
+- `OTARI_API_KEY`, `OPENROUTER_API_KEY` are read only in `lib/config.ts` (lines 21 and 24) and used in `lib/agent/parse-constraints.ts`; no `"use client"` file imports either (`"use client"` files: `app/error.tsx`, `components/agent-bridge.tsx`, `fairness-scene.tsx`, `join-flow.tsx`, `peer-call.tsx`, `result-view.tsx`, `site-nav.tsx`). `NEXT_PUBLIC_` values: `NEXT_PUBLIC_BRAND_FILES` (file names) and `NEXT_PUBLIC_SITE_URL` (the public URL), both public.
+- `target="_blank"`: one, the new footer Source link, with `rel="noopener noreferrer"`.
+- `http://` in `app/ components/ lib/ public/`: only SVG `xmlns` strings (`app/icon.svg`, `public/logo.svg`, `public/illustrations/scene-*.svg`). `OSRM_BASE_URL` default is https (`lib/config.ts` line 11).
+- `fetch(`: browser calls only to `/api/parse` (`components/join-flow.tsx` line 141) and `/api/plan` (`components/result-view.tsx` line 119); server calls only in `lib/upstream.ts` (OSRM, Otari, OpenRouter, all named on `/about`). No `<form>` element exists.
+- `process.env` reads: `ADAPTER_MODE`, `OSRM_BASE_URL`, `NEXT_PUBLIC_SITE_URL`, `OTARI_API_KEY`, `OTARI_BASE_URL`, `OTARI_MODEL`, `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `VERCEL` (`lib/config.ts`) and `NEXT_PUBLIC_BRAND_FILES` (`lib/brand-files.ts`); all ten are in `.env.example`. `useSearchParams`: none. `fs.write`: none. Edge runtime: none (`app/api/parse/route.ts` is `nodejs`).
+- `console.log` in `app/` and `components/`: none. Server-only `[core]` logs remain in `lib/adapter.ts`, `lib/adapter-real.ts`, `lib/agent/parse-constraints.ts` (counts and reason codes only).
+- `.farm-live.json` unchanged: `requiredEnv: []`, `optionalEnv: ["OTARI_API_KEY", "OPENROUTER_API_KEY"]`.
+
+### Sameness tripwire (greps and results)
+
+- Dead hexes (0b0f14 ... f59e0b) in `app/ components/ lib/`: covered by the next grep, no match.
+- `#[0-9a-fA-F]{6}` in `app/ components/ lib/` (ts, tsx, css, json, js): only `app/globals.css` lines 8 to 41 and the `OG` block `app/opengraph-image.tsx` lines 10 to 13. `app/icon.svg` also has hexes (never-touch brand file).
+- `@keyframes`: only `mesora-slide-in` (`app/globals.css` line 132). No `fade-up`, `float`, `glow-pulse`, `caret-blink`, `pulse-dot`.
+- `backdrop-blur`, `--delay`, `--d:`: none. Header is solid `bg-background` (`components/site-header.tsx` line 7), one `BrandMark` inside the brand link.
+- Animation libraries in `package.json`: only `gsap` and `@gsap/react`.
+- Em dash, en dash, ` -- ` in app, components, lib, public JSON, README, DEMO, DELIVERY, HANDOFF: none.
+- Banned vocabulary: one match, HANDOFF.md line 99, the rule that lists the words.
+
+### Failed attempts
+
+None.
+
+### Files changed
+
+New: `components/peer-call.tsx`, `DELIVERY.md`, `SECURITY.md`.
+Edited: `app/about/page.tsx`, `DEMO.md`, `components/site-nav.tsx`, `components/ui/button.tsx`, `components/join-flow.tsx`, `components/result-view.tsx`, `components/fairness-scene.tsx`, `components/agent-bridge.tsx`, `app/page.tsx`, `app/layout.tsx`, `app/opengraph-image.tsx` (text only), `lib/config.ts`, `lib/adapter-real.ts`, `public/agent-manifest.json`, `.env.example`, `README.md`, `HANDOFF.md`.
+Untouched on purpose: `app/icon.svg`, `public/*.svg`, `fixtures/`, `.farm-live.json`, `lib/data/seed.ts` (74 vs 38 unchanged).
+
+### Commands run
+
+None. The agent cannot run commands. (One empty `true` shell call was issued by mistake; it did nothing.)
+
+### Unmet or partly met items (honesty check)
+
+- Build, tests and proof are unverified until the runner runs them.
+- The peer call is not cross-site: it runs in the same page through `siteActions` and says "Simulated" (`components/peer-call.tsx` lines 93 and 97). `links.json` and `check_partner.mjs` from Mission item 5 are not done.
+- `public/agentic/runtime.js` is still missing; the manifest's `runtime` field points at a 404. `build_network.mjs --check` has never run.
+- Responsive behavior was checked by reading classes only, never in a browser at 360, 768 or 1280 px. The mobile nav panel is `absolute` under the sticky header (`components/site-nav.tsx` line 68), which relies on the header being a positioned element (it is `sticky`).
+- `app/join/[step]` keeps its live preview as a side column at lg (`components/join-flow.tsx` line 218). L1 bans side columns on the home route only, so this was left.
+- `app/layout.tsx` description is about 140 characters by hand count, not measured.
+- The `/about` "Callable by other agentic sites" card still describes the intended cross-site capability; the section below it is the simulated version and is labelled.
+
+### Open questions
+
+- Should the agent box refuse or strip street-like text before POSTing to `/api/parse`? Today the copy warns; the code sends what is typed.
+- Should the manifest drop its `runtime` field until the file exists, so a validator does not hit a 404?
+
+### Next best step
+
+Phase 5: the frontend pass (K2 signatures 2 and 3: intro timeline on the home h1, "Compare with midpoint" tween on `/result/[id]`). Real Overpass venues, the Leaflet map and runtime vendoring stay on the manual checklist above.
