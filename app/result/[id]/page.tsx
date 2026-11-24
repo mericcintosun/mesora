@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ResultView } from "@/components/result-view";
 import { SceneSlot } from "@/components/scene-slot";
+import { Button } from "@/components/ui/button";
 import { getAdapter, solveWithFallback, type ServedPlan } from "@/lib/adapter";
 
 // Seeded ids (friday-supper, sunday-brunch) are solved here on the server, through the
@@ -41,24 +42,21 @@ export default async function ResultPage({ params }: { params: Promise<{ id: str
         seeded={group ? { title: group.title, participants: group.participants } : null}
         initialPlan={served}
       />
-      <section className="grid items-center gap-8 border-t border-border py-12 lg:grid-cols-2">
+      <section className="space-y-6 border-t border-border py-16">
         <SceneSlot
           n={3}
-          alt="A long table under neon signs at Yenikapı with four friends arriving from four directions, each holding a phone showing the same link"
-          width={960}
-          height={640}
-          className="rounded-3xl"
+          alt="A long table under an acid neon AVLU sign with four friends' route lines arriving from four directions, each marked with its trip in minutes"
+          width={1440}
+          height={480}
+          className="h-48 w-full rounded-3xl object-cover sm:h-auto"
         />
-        <div className="space-y-3">
-          <h2 className="text-2xl font-bold sm:text-3xl">Want another table?</h2>
-          <p className="max-w-[60ch] text-muted-foreground">
-            Sunday brunch has five people across both sides of the Bosphorus, one vegan and one on a 350 TL budget. See what the solver
-            does with that.
-          </p>
-          <Link href="/result/sunday-brunch" className="font-semibold text-primary underline decoration-2 underline-offset-4">
-            Open Sunday brunch
-          </Link>
-        </div>
+        <h2 className="text-2xl sm:text-3xl">Want another table?</h2>
+        <p className="max-w-[65ch] text-muted-foreground">
+          Sunday brunch has five people on both sides of the Bosphorus, one of them vegan and one on a 350 TL budget.
+        </p>
+        <Button asChild variant="ghost">
+          <Link href="/result/sunday-brunch">Open Sunday brunch</Link>
+        </Button>
       </section>
     </>
   );

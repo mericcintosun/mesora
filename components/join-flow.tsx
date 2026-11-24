@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { GROUP_EVENT, siteActions } from "@/components/agent-bridge";
+import { SceneSlot } from "@/components/scene-slot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -330,8 +331,8 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
           </div>
         </section>
 
-        <aside aria-label="Live preview">
-          <Card variant={preview.pick ? "neon" : "default"} className="lg:sticky lg:top-24">
+        <aside aria-label="Live preview" className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          <Card variant={preview.pick ? "neon" : "default"}>
             <CardHeader>
               <CardDescription>{group.title}, the table so far</CardDescription>
               {preview.pick ? (
@@ -374,6 +375,13 @@ export function JoinFlow({ step }: { step: JoinStepId }) {
               {!me && <p className="text-sm text-muted-foreground">Pick your area to see where you would land.</p>}
             </CardContent>
           </Card>
+          <SceneSlot
+            n={2}
+            alt="Four phone outlines side by side, each showing the same link one line longer as another friend adds a district, the last phone lit in acid"
+            width={720}
+            height={640}
+            className="mx-auto hidden max-w-[18rem] sm:block"
+          />
         </aside>
       </div>
     </div>

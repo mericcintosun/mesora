@@ -38,7 +38,7 @@ export default function AboutPage() {
   return (
     <div className="space-y-16 py-12">
       <section className="mesora-stagger space-y-5">
-        <h1 className="max-w-[16ch] text-5xl font-extrabold leading-none sm:text-7xl">How Mesora picks a table</h1>
+        <h1 className="max-w-[16ch] text-5xl sm:text-7xl">How Mesora picks a table</h1>
         <p className="max-w-[65ch] text-lg text-muted-foreground">
           Four ideas, each small. Together they let a group agree on a place without anyone handing a home address to an organizer or a
           server.
@@ -60,10 +60,10 @@ export default function AboutPage() {
 
       <section className="grid items-center gap-10 lg:grid-cols-2">
         <SceneSlot
-          n={2}
-          alt="Four phones in a row, each showing the same Mesora link growing by one line as a different friend's agent adds a district and a budget"
+          n={5}
+          alt="Two neon-outlined browser windows joined by a violet line: an event site on the left asks, Mesora on the right answers with one acid table pin"
           width={960}
-          height={640}
+          height={540}
           className="rounded-3xl"
         />
         <div className="space-y-5">
