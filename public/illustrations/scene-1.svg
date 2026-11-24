@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 360" width="1440" height="360">
+  <rect width="1440" height="360" rx="24" fill="#1b1717"/>
+  <path d="M640 0 C700 80 610 150 690 220 C760 280 720 330 760 360" fill="none" stroke="#262020" stroke-width="56"/>
+  <path d="M640 0 C700 80 610 150 690 220 C760 280 720 330 760 360" fill="none" stroke="#3a3030" stroke-width="2"/>
+  <g fill="none" stroke-width="5" stroke-linecap="round">
+    <path d="M180 250 C320 250 420 210 560 196" stroke="#e8ff3a"/>
+    <path d="M760 90 C700 130 640 160 588 186" stroke="#e8ff3a"/>
+    <path d="M1000 260 C860 250 720 220 600 202" stroke="#e8ff3a"/>
+    <path d="M1260 220 C1100 120 800 150 604 192" stroke="#e8ff3a"/>
+  </g>
+  <g fill="none" stroke="#9b5cff" stroke-width="3" stroke-dasharray="6 10">
+    <path d="M180 250 C420 300 600 160 700 170"/>
+  </g>
+  <circle cx="580" cy="196" r="30" fill="#121010" stroke="#e8ff3a" stroke-width="5"/>
+  <circle cx="580" cy="196" r="12" fill="#9b5cff"/>
+  <g fill="#121010" stroke="#f6f1ec" stroke-width="4">
+    <circle cx="180" cy="250" r="12"/>
+    <circle cx="760" cy="90" r="12"/>
+    <circle cx="1000" cy="260" r="12"/>
+    <circle cx="1260" cy="220" r="12"/>
+  </g>
+  <circle cx="700" cy="170" r="9" fill="none" stroke="#9b5cff" stroke-width="3"/>
+  <g fill="#f6f1ec" font-family="Arial, sans-serif" font-size="22" font-weight="700">
+    <text x="140" y="300">Bakırköy</text>
+    <text x="730" y="62">Beşiktaş</text>
+    <text x="960" y="310">Kadıköy</text>
+    <text x="1210" y="270">Ataşehir</text>
+  </g>
+  <text x="500" y="260" fill="#e8ff3a" font-family="Arial, sans-serif" font-size="22" font-weight="700">Yenikapı</text>
+</svg>
