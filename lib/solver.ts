@@ -4,7 +4,10 @@
 // the plan screen can show the difference.
 import { getDistrict } from "@/lib/data";
 import { VENUES } from "@/lib/data/seed";
-import { DISTRICT_ORDER, type Candidate, type Participant, type PlanView, type Venue } from "@/lib/types";
+import { DISTRICT_ORDER, type Candidate, type Participant, type PlanView, type TravelSource, type Venue } from "@/lib/types";
+
+/** Minutes from one participant's district to one venue. */
+export type MinutesFn = (p: Participant, venue: Venue) => number;
 
 export type { Candidate, Leg } from "@/lib/types";
 /** The solver's output; the same shape the adapter and API return as PlanView. */
@@ -24,10 +27,8 @@ function fromMinutes(total: number): string {
 }
 
 /**
- * Travel adapter. Returns transit minutes from a participant's district to a venue.
- * TODO: swap mock for an OSRM table call (router.project-osrm.org/table/v1/driving or a
- * transit-capable OSRM) built from each participant's geohash-5 centroid. On error, fall
- * back to haversine km x 1.4 at 25 km/h and set travelSource to "estimate".
+ * Seed travel table: cached minutes from a participant's district to a venue.
+ * The real adapter passes live OSRM minutes to solvePlanWith instead.
  */
 export function travelMinutes(p: Participant, venue: Venue): number {
   return venue.minutes[DISTRICT_ORDER.indexOf(p.district)] ?? 60;
@@ -46,8 +47,8 @@ function exclusionFor(venue: Venue, people: Participant[], startMin: number): st
   return null;
 }
 
-function candidateFor(venue: Venue, people: Participant[], startMin: number): Candidate {
-  const legs = people.map((p) => ({ name: p.name, districtName: getDistrict(p.district).name, minutes: travelMinutes(p, venue) }));
+function candidateFor(venue: Venue, people: Participant[], startMin: number, minutesFn: MinutesFn): Candidate {
+  const legs = people.map((p) => ({ name: p.name, districtName: getDistrict(p.district).name, minutes: minutesFn(p, venue) }));
   return {
     venue,
     legs,
@@ -71,16 +72,22 @@ function midpointVenue(people: Participant[], venues: Venue[]): Venue {
   })[0];
 }
 
-export function solvePlan(people: Participant[], venues: Venue[] = VENUES): Plan {
+/** The solver with its travel source injected: the seed table, live OSRM minutes or the estimate. */
+export function solvePlanWith(people: Participant[], venues: Venue[], minutesFn: MinutesFn, source: TravelSource): Plan {
   const startMin = people.length ? Math.max(...people.map((p) => toMinutes(p.earliest))) : toMinutes("19:00");
   const candidates = venues
-    .map((v) => candidateFor(v, people, startMin))
+    .map((v) => candidateFor(v, people, startMin, minutesFn))
     .sort((a, b) => {
       if (!!a.excluded !== !!b.excluded) return a.excluded ? 1 : -1;
       return a.longest - b.longest || a.total - b.total;
     });
   const pick = candidates.find((c) => !c.excluded) ?? null;
   const mid = midpointVenue(people, venues);
-  const midpoint = candidates.find((c) => c.venue.id === mid.id) ?? candidateFor(mid, people, startMin);
-  return { start: fromMinutes(startMin), candidates, pick, midpoint, travelSource: "seed" };
+  const midpoint = candidates.find((c) => c.venue.id === mid.id) ?? candidateFor(mid, people, startMin, minutesFn);
+  return { start: fromMinutes(startMin), candidates, pick, midpoint, travelSource: source };
+}
+
+/** Seed path, unchanged for client components: the cached table, source "seed". */
+export function solvePlan(people: Participant[], venues: Venue[] = VENUES): Plan {
+  return solvePlanWith(people, venues, travelMinutes, "seed");
 }

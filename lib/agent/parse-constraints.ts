@@ -6,7 +6,9 @@
 //      key passed per request (BYOK). This is the submission path the demo video must show.
 //   2. The developer's local `claude` CLI, for zero-key local development.
 //   3. A deterministic rule parser, so the product never breaks without a key.
+import { OPENROUTER_API_KEY, OPENROUTER_MODEL, OTARI_API_KEY, OTARI_BASE_URL, OTARI_MODEL, VERCEL } from "@/lib/config";
 import { DISTRICTS, type Diet, type DistrictId } from "@/lib/data";
+import { fetchJson } from "@/lib/upstream";
 
 export interface ParsedConstraints {
   district: DistrictId | null;
@@ -78,7 +80,8 @@ function extractJson(text: string): unknown {
 
 /** Path 1: an OpenAI-compatible chat completion on Otari or OpenRouter. */
 async function callChat(baseUrl: string, key: string, model: string, text: string): Promise<string> {
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+  // fetchJson applies UPSTREAM_TIMEOUT_MS and UPSTREAM_RETRIES and throws a typed ApiError.
+  const data = (await fetchJson(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
@@ -89,18 +92,15 @@ async function callChat(baseUrl: string, key: string, model: string, text: strin
         { role: "user", content: text },
       ],
     }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw new Error(`LLM ${res.status}`);
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  return data.choices?.[0]?.message?.content ?? "";
+  })) as { choices?: { message?: { content?: string } }[] } | null;
+  return data?.choices?.[0]?.message?.content ?? "";
 }
 
 let claudeAvailable: boolean | null = null;
 
 /** Path 2: the local `claude` CLI, detected once with `claude --version`. */
 async function callClaudeCli(text: string): Promise<string | null> {
-  if (process.env.VERCEL) return null;
+  if (VERCEL) return null;
   const { spawn, spawnSync } = await import("node:child_process");
   if (claudeAvailable === null) {
     try {
@@ -134,17 +134,16 @@ async function callClaudeCli(text: string): Promise<string | null> {
 export async function parseConstraints(text: string, byok?: ByokKey): Promise<{ constraints: ParsedConstraints; source: ParseSource }> {
   const rules = parseWithRules(text);
 
-  const otariKey = byok?.provider === "otari" ? byok.key : process.env.OTARI_API_KEY;
-  const routerKey = byok?.provider === "openrouter" ? byok.key : process.env.OPENROUTER_API_KEY;
+  const otariKey = byok?.provider === "otari" ? byok.key : OTARI_API_KEY;
+  const routerKey = byok?.provider === "openrouter" ? byok.key : OPENROUTER_API_KEY;
 
   try {
-    if (otariKey && process.env.OTARI_BASE_URL) {
-      const out = await callChat(process.env.OTARI_BASE_URL, otariKey, process.env.OTARI_MODEL ?? "alibaba/qwen3.8-flash", text);
+    if (otariKey && OTARI_BASE_URL) {
+      const out = await callChat(OTARI_BASE_URL, otariKey, OTARI_MODEL, text);
       return { constraints: coerce(extractJson(out), rules), source: "otari" };
     }
     if (routerKey) {
-      const model = process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.3-70b-instruct:free";
-      const out = await callChat("https://openrouter.ai/api/v1", routerKey, model, text);
+      const out = await callChat("https://openrouter.ai/api/v1", routerKey, OPENROUTER_MODEL, text);
       return { constraints: coerce(extractJson(out), rules), source: "openrouter" };
     }
   } catch {
