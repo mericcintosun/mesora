@@ -406,3 +406,75 @@ None. The agent cannot run commands. (One empty `true` shell call was issued by 
 ### Next best step
 
 Phase 5: the frontend pass (K2 signatures 2 and 3: intro timeline on the home h1, "Compare with midpoint" tween on `/result/[id]`). Real Overpass venues, the Leaflet map and runtime vendoring stay on the manual checklist above.
+
+## 10. Phase 5: frontend pass, scene, submission files
+
+### Goal
+
+DEMO.md step 1 through the result page look like a funded product on a cold open: L1 poster home with no card in the first viewport, all three K2 signatures (pinned scene, headline intro, "Compare with midpoint" 38 to 74 tween), five or six scene slots, and the README, SUBMISSION.md and screenshot list ready for the form.
+
+### Status
+
+All five slices are written; no slice was cut (scene-6 kept). Nothing was built, tested or run by the agent. `npm run build`, `npm test` and `npm run proof` are the runner's checks and are **unverified**. The delta contract with diagnosis, changes, proof counts, route, slot and interaction maps is in the repo-root delta file (not committed).
+
+### Decisions
+
+- **Pinned scene on phones.** The before shots show a 1,100 px empty band after the scene (pin spacer of `+=900`) and a squeezed bar column at 390 px. The pin now runs only at `(min-width: 768px)` with `end: "+=520"`; below 768 px the same timeline scrubs from `top 70%` to `bottom 60%` without a pin (`components/fairness-scene.tsx` lines 75 to 83). The bars sit between two LINE rules instead of a grey card, and phone rows stack the name above a full-width bar.
+- **No opacity dimming.** The venue pills no longer tween to opacity 0.35. A `data-phase` attribute on the section (set by the ScrollTrigger `onUpdate`) switches which pill is lit through `group-data-[phase=...]` classes. With JS off neither class applies and both pills show full.
+- **Intro timeline** (`components/hero-intro.tsx`): the h1 holds an `sr-only` span with the full headline and an `aria-hidden` span of word spans (`data-hero-word`). GSAP `from` tweens (x -24, autoAlpha 0, `expo.out`, 0.55 s, which is the M2 curve) run after hydration inside `gsap.matchMedia()` with `(prefers-reduced-motion: no-preference)`; server HTML is fully visible.
+- **Compare tween** (`TripCompare` in `components/result-view.tsx`): one `gsap.to` on `{ t }` with `onUpdate` paints the figure and every bar from `plan.pick.legs` to `plan.midpoint.legs`. The handler is wrapped in `contextSafe` from `useGSAP`; reduced motion is detected by a `gsap.matchMedia()` inside `useGSAP` and makes the switch instant. React renders the pick values and never rewrites the tweened nodes because their props never change. The bars and figure turn violet in compare mode through a `data-compare` attribute. The old second violet bar per row ("N min at midpoint") is gone; the toggle replaces it.
+- **Ghost button** is now a LINE outlined pill (`border-line`, hover acid) so the secondary CTA reads as a control, not floating text (before-mobile-fold shot).
+- **Footer**: one sentence plus Method, Source repo, the Devpost page and the two JSON files.
+- **Home fold panels**: one visible sentence in each `<summary>`, details folded; the privacy facts (parse route, Otari or OpenRouter, OSRM) stay inside the second panel.
+- **Glow count** per screen: `/` the CTA (`app/page.tsx`), `/join/time` the final button, `/result/[id]` the h1 text glow, `/about` the bottom CTA. One each.
+- **AI-use quote.** The spec asked to quote "narration in the demo video must be the entrant's own; no rule on AI tools in code" and also to keep the word "video" out of README and SUBMISSION.md. README quotes "no rule on AI tools in code" verbatim and paraphrases the narration rule without that word.
+- **CLAUDE.md says never touch `public/illustrations/`**; this phase's spec explicitly asked to extend scene 1 to 3 and add 4 to 6, so the phase spec won. scene-1 lost its SURFACE slab, scene-2 became 720x640 (near square), scene-3 became 1440x480 (wide); the minutes drawn in scene-3 (20, 35, 30, 38) are the seed legs at Yenikapı Avlu Mutfak.
+- **LICENSE** added (MIT, "The Mesora authors"); README names it.
+
+### SVG fallbacks
+
+Glob `public/brand/*` found no files, so every slot renders its SVG fallback: scene-1 (`/`), scene-2 (`/join/[step]`, from sm up), scene-3 (`/result/[id]`), scene-4 (`/result/live` empty state), scene-5 (`/about`), scene-6 (not-found).
+
+### Failed attempts
+
+None.
+
+### Files changed
+
+New: `components/hero-intro.tsx`, `public/illustrations/scene-4.svg`, `scene-5.svg`, `scene-6.svg`, `SUBMISSION.md`, `docs/SCREENSHOTS.md`, `LICENSE`, `.farm-commits.json` (not committed), the delta file (not committed).
+Edited: `app/page.tsx`, `app/layout.tsx`, `app/globals.css`, `app/not-found.tsx`, `app/about/page.tsx`, `app/result/[id]/page.tsx`, `components/fairness-scene.tsx`, `components/result-view.tsx`, `components/join-flow.tsx`, `components/site-nav.tsx`, `components/ui/button.tsx`, `components/ui/states.tsx`, `public/illustrations/scene-1.svg`, `scene-2.svg`, `scene-3.svg`, `README.md`, `HANDOFF.md`.
+Untouched on purpose: `lib/data/seed.ts` (74 vs 38 unchanged), `app/icon.svg`, `public/__farm.txt`, `.farm-live.json`, `fixtures/`, `components/brand-mark.tsx`, `components/site-header.tsx`, `components/peer-call.tsx`, IDENTITY.md (no decision changed, no amendment).
+
+### Commands run
+
+None, the agent cannot run commands.
+
+### Unmet or partly met items (honesty check)
+
+- Build, types, tests and proof are unverified. Type risks worth a look if the build fails: `ScrollTrigger.Vars` as a parameter type (`components/fairness-scene.tsx` line 47), and `contextSafe` returned by `useGSAP` (`components/result-view.tsx` line 101).
+- Never seen in a browser: the pinned scene at 768 px with a short viewport may still be taller than the screen while pinned; the intro may show a brief flash, because the server HTML is visible and GSAP sets the `from` state after hydration (by design, so JS-off stays readable).
+- scene-2 is `hidden` below `sm` (`components/join-flow.tsx`, the SceneSlot after the preview card) to keep the phone step short.
+- `/result/live` also shows the "Want another table?" strip with scene-3 under its result or empty state.
+- `.mesora-enter` and `.mesora-stagger` still use the CSS keyframe with `both` fill, which starts at opacity 0 for 550 ms; it runs without JS, so content is never stuck hidden, but it is CSS-hidden for the first frames.
+- The join flow keeps its preview as a side column at lg (allowed: the L1 ban is for the home route).
+- The SUBMISSION.md Otari note describes the `/api/v1` base URL pitfall recorded in CLAUDE.md; the builder should confirm it matches what they actually met.
+
+### Open questions
+
+- Is Otari configured on the deployment? If not, drop the Otari note and the `mozilla-otari` tag from SUBMISSION.md.
+- Should scene-2 show on phones too?
+
+### Next best step
+
+Runner: `npm install`, `npm run build`, `npm test`, `npm run proof`, then the screenshot pass in `docs/SCREENSHOTS.md` compared against the before shots. Phases 6 and 7 apply the judge findings, then freeze.
+
+### Manual submit checklist (needs a person)
+
+1. Pin the 11 November 2026 spec commit of https://github.com/cognizant-ai-labs/agentic-web in README.
+2. Vendor `public/agentic/runtime.js` with the agentify-website skill and run `node build_network.mjs --check` against the deployed URL; paste the output in README.
+3. Decide on the manifest `runtime` field: drop it until the file exists, or keep it once vendored.
+4. Set the Otari account email in the Devpost form (left out of SUBMISSION.md on purpose).
+5. Record the demo in your own voice, under 2 minutes, public on YouTube, and paste the link into the form yourself (left out of SUBMISSION.md and README on purpose).
+6. Take the screenshots in `docs/SCREENSHOTS.md` and upload them.
+7. Run Lighthouse on `/` and `/result/friday-supper` (performance and accessibility at 80 or above).
+8. Confirm the site stays free and open through 18 January 2027.
