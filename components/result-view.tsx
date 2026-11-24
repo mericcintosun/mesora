@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import gsap from "gsap";
+import { useGSAP } from "@gsap/react";
 import { GROUP_EVENT } from "@/components/agent-bridge";
+import { SceneSlot } from "@/components/scene-slot";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import type { ServedPlan } from "@/lib/adapter";
 import { groupFromHash, hashFor } from "@/lib/codec";
 import type { Group } from "@/lib/data";
 import { solvePlan, type Plan } from "@/lib/solver";
-import type { ApiResponse, PlanView } from "@/lib/types";
+import type { ApiResponse, Candidate, PlanView } from "@/lib/types";
+
+gsap.registerPlugin(useGSAP);
 
 type GroupLike = Pick<Group, "title" | "participants">;
 
@@ -71,6 +76,120 @@ function ShareLinkButton({ group }: { group: GroupLike }) {
       </Button>
       {copied === "fail" && <Badge variant="destructive">Clipboard blocked. Copy the address bar instead.</Badge>}
     </div>
+  );
+}
+
+/**
+ * Kit K2 signature 3: "Compare with midpoint". Pressing it tweens the longest-trip
+ * figure and every trip bar from Mesora's pick to the geographic midpoint (Friday
+ * supper on the seed: 38 to 74 min) and back. One gsap.to on a plain object drives
+ * every mark through onUpdate, so the figure and the bars always move together.
+ * Every number comes from the plan object (solvePlan on lib/data/seed.ts, or OSRM
+ * minutes in real mode). React renders the pick state and never rewrites the tweened
+ * nodes, because their props do not change between renders. Under
+ * prefers-reduced-motion the values switch instantly.
+ */
+function TripCompare({ plan, pick }: { plan: Plan; pick: Candidate }) {
+  const ref = useRef<HTMLElement>(null);
+  const figureRef = useRef<HTMLSpanElement>(null);
+  const mix = useRef({ t: 0 });
+  const animate = useRef(false);
+  const [compare, setCompare] = useState(false);
+  const scale = Math.max(80, plan.midpoint.longest);
+  const rows = pick.legs.map((leg, i) => ({ leg, from: leg.minutes, to: plan.midpoint.legs[i]?.minutes ?? leg.minutes }));
+
+  const { contextSafe } = useGSAP(
+    () => {
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        animate.current = true;
+        return () => {
+          animate.current = false;
+        };
+      });
+    },
+    { scope: ref }
+  );
+
+  const paint = (t: number) => {
+    const root = ref.current;
+    if (!root) return;
+    if (figureRef.current) figureRef.current.textContent = String(Math.round(pick.longest + (plan.midpoint.longest - pick.longest) * t));
+    rows.forEach((r, i) => {
+      const m = r.from + (r.to - r.from) * t;
+      const bar = root.querySelector<HTMLElement>(`[data-trip-bar="${i}"]`);
+      const label = root.querySelector<HTMLElement>(`[data-trip-min="${i}"]`);
+      if (bar) bar.style.width = `${Math.min(100, (m / scale) * 100)}%`;
+      if (label) label.textContent = String(Math.round(m));
+    });
+  };
+
+  const toggle = contextSafe(() => {
+    const next = !compare;
+    setCompare(next);
+    const target = next ? 1 : 0;
+    gsap.killTweensOf(mix.current);
+    if (!animate.current) {
+      mix.current.t = target;
+      paint(target);
+      return;
+    }
+    gsap.to(mix.current, { t: target, duration: 0.55, ease: "expo.out", onUpdate: () => paint(mix.current.t) });
+  });
+
+  return (
+    <section ref={ref} aria-labelledby="trips" data-compare={compare ? "on" : "off"} className="group space-y-6">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <h2 id="trips" className="text-2xl sm:text-3xl">
+            Trip per person
+          </h2>
+          <p aria-live="polite" className="text-muted-foreground">
+            {compare ? `At the map midpoint, ${plan.midpoint.venue.name}` : `At Mesora's pick, ${pick.venue.name}`}
+          </p>
+        </div>
+        <p className="flex flex-col items-start sm:items-end">
+          <span className="text-sm font-semibold text-muted-foreground">Longest trip</span>
+          <span className="flex items-baseline gap-1">
+            <span
+              ref={figureRef}
+              className="font-[family-name:var(--font-display)] text-figure font-extrabold tabular-nums text-primary group-data-[compare=on]:text-violet"
+            >
+              {pick.longest}
+            </span>
+            <span className="text-xl font-semibold">min</span>
+          </span>
+        </p>
+      </div>
+
+      <Button variant="secondary" size="lg" aria-pressed={compare} onClick={toggle}>
+        Compare with midpoint
+      </Button>
+
+      <ul className="space-y-6 border-y-2 border-line py-8">
+        {rows.map((r, i) => (
+          <li
+            key={r.leg.name}
+            className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 sm:grid-cols-[10rem_minmax(0,1fr)_5rem] sm:items-center"
+          >
+            <span className="min-w-0 leading-tight">
+              <strong className="break-words">{r.leg.name}</strong>{" "}
+              <span className="text-sm text-muted-foreground sm:block">{r.leg.districtName}</span>
+            </span>
+            <span className="text-right font-[family-name:var(--font-display)] font-bold tabular-nums sm:order-last">
+              <span data-trip-min={i}>{r.from}</span> min
+            </span>
+            <span className="col-span-2 h-4 w-full rounded-full bg-secondary sm:col-span-1">
+              <span
+                data-trip-bar={i}
+                className="block h-4 rounded-full bg-primary transition-colors duration-500 group-data-[compare=on]:bg-violet"
+                style={{ width: `${Math.min(100, (r.from / scale) * 100)}%` }}
+              />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -152,6 +271,15 @@ export function ResultView({ seeded, initialPlan }: { seeded: GroupLike | null; 
         body="Add your area to start the table, or open the Mesora link a friend sent you. The group lives after the # in the link, so a bare /result/live has nothing to show."
         href="/join/area"
         cta="Add your area"
+        art={
+          <SceneSlot
+            n={4}
+            alt="An empty neon-outlined table with one acid chair lit and three dark chairs waiting, a share link drawn as a violet loop above it"
+            width={640}
+            height={600}
+            className="mx-auto max-w-xs"
+          />
+        }
       />
     );
   }
@@ -175,7 +303,6 @@ export function ResultView({ seeded, initialPlan }: { seeded: GroupLike | null; 
 
   const pick = plan.pick;
   const kind = sourceKind(served);
-  const scale = Math.max(80, plan.midpoint.longest);
 
   return (
     <div className="space-y-12 py-10">
@@ -212,38 +339,7 @@ export function ResultView({ seeded, initialPlan }: { seeded: GroupLike | null; 
         )}
       </section>
 
-      {pick && (
-        <section aria-labelledby="trips" className="space-y-4">
-          <h2 id="trips" className="text-2xl font-bold sm:text-3xl">
-            Trip per person
-          </h2>
-          <Card>
-            <CardContent className="space-y-5 pt-6">
-              {pick.legs.map((leg, i) => {
-                const before = plan.midpoint.legs[i]?.minutes ?? 0;
-                return (
-                  <div key={leg.name} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
-                    <span className="min-w-0 leading-tight">
-                      <strong className="block break-words">{leg.name}</strong>
-                      <span className="text-sm text-muted-foreground">{leg.districtName}</span>
-                    </span>
-                    <div className="min-w-0 space-y-1.5">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="h-3 min-w-0 rounded-full bg-primary" style={{ width: `${(leg.minutes / scale) * 100}%` }} />
-                        <span className="shrink-0 text-sm font-semibold tabular-nums">{leg.minutes} min</span>
-                      </div>
-                      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="h-3 min-w-0 rounded-full bg-violet" style={{ width: `${(before / scale) * 100}%` }} />
-                        <span className="text-sm text-muted-foreground tabular-nums">{before} min at midpoint</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </section>
-      )}
+      {pick && <TripCompare plan={plan} pick={pick} />}
 
       <section aria-labelledby="considered" className="space-y-4">
         <h2 id="considered" className="text-2xl font-bold sm:text-3xl">
